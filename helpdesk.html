@@ -275,9 +275,9 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
             <h1 class="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">Panel de Control General</h1>
-            <p class="text-xs text-slate-500">Métricas en tiempo real de la red ISP y soporte técnico.</p>
+            <p class="text-xs text-slate-500">Métricas en tiempo real de la red ISP y soporte técnico Tecnoven.</p>
           </div>
-          <button class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-2">
+          <button onclick="renderDashboardMetrics()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-2 cursor-pointer">
             <i class="fa-solid fa-rotate-right text-xs"></i> Actualizar Datos
           </button>
         </div>
@@ -347,6 +347,13 @@
             </div>
           </div>
         </div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-xs">
+          <h3 class="text-sm font-bold text-slate-900 mb-4">Actividad Reciente en el Helpdesk</h3>
+          <div id="dashboard-recent-activity" class="space-y-3">
+            <!-- Injected by JS -->
+          </div>
+        </div>
       </div>
     </div>
 
@@ -356,19 +363,20 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
             <h1 class="text-xl md:text-2xl font-bold text-slate-900">Directorio de Clientes ISP</h1>
-            <p class="text-xs text-slate-500">Gestión de contratos y nodos de fibra Tecnoven.</p>
+            <p class="text-xs text-slate-500">Gestión de contratos, credenciales PPPoE y nodos de fibra Tecnoven.</p>
           </div>
-          <button class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition">
-            + Registrar Nuevo
+          <button onclick="openModal('modal-new-client')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition cursor-pointer flex items-center gap-2">
+            <i class="fa-solid fa-plus text-xs"></i> Registrar Nuevo Cliente
           </button>
         </div>
 
         <div class="bg-white border border-slate-200 rounded-2xl overflow-x-auto shadow-xs">
-          <table class="w-full text-left border-collapse min-w-[600px]">
+          <table class="w-full text-left border-collapse min-w-[700px]">
             <thead>
               <tr class="border-b border-slate-200 bg-slate-50 text-slate-500 text-xs font-bold">
                 <th class="p-4">Cliente / Contrato</th>
                 <th class="p-4">Plan Asignado</th>
+                <th class="p-4">Credenciales PPPoE</th>
                 <th class="p-4">Estado IP</th>
                 <th class="p-4">Estatus Servicio</th>
                 <th class="p-4 text-right">Acciones</th>
@@ -382,20 +390,355 @@
       </div>
     </div>
 
-    <!-- VIEW 4: GENERIC OTHER MODULES -->
-    <div id="view-generic" class="hidden flex-1 bg-slate-50 p-6 flex items-center justify-center">
-      <div class="max-w-md mx-auto text-center space-y-4">
-        <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-100 shadow-sm">
-          <i class="fa-solid fa-layer-group text-2xl"></i>
+    <!-- VIEW 4: CALL CENTER MODULE -->
+    <div id="view-callcenter" class="hidden flex-1 bg-slate-50 p-4 md:p-8 overflow-y-auto">
+      <div class="max-w-7xl mx-auto space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <h1 class="text-xl md:text-2xl font-bold text-slate-900">Call Center & IVR Tecnoven</h1>
+            <p class="text-xs text-slate-500">Monitor de llamadas telefónicas en vivo y colas de atención.</p>
+          </div>
+          <button onclick="openModal('modal-call-logs')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-phone text-xs"></i> Ver Registro Histórico
+          </button>
         </div>
-        <h2 id="generic-view-title" class="text-xl md:text-2xl font-bold text-slate-900 capitalize">Módulo</h2>
-        <p class="text-slate-500 text-xs">Este entorno está sincronizado con los servidores centrales de Tecnoven Services.</p>
-        <button onclick="switchView('helpdesk')" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition cursor-pointer">
-          Volver al Helpdesk Chat
-        </button>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Llamadas en Cola (4)</h3>
+              <span class="w-2.5 h-2.5 bg-amber-500 rounded-full animate-ping"></span>
+            </div>
+            <div class="space-y-3">
+              <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs flex justify-between items-center">
+                <div>
+                  <p class="font-bold text-slate-900">+58 412-9988112</p>
+                  <p class="text-slate-500 text-[10px]">Espera: 01:24 min • Op: Soporte</p>
+                </div>
+                <button class="px-3 py-1 bg-emerald-600 text-white font-semibold rounded-lg text-[10px]">Atender</button>
+              </div>
+              <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs flex justify-between items-center">
+                <div>
+                  <p class="font-bold text-slate-900">+58 424-5511442</p>
+                  <p class="text-slate-500 text-[10px]">Espera: 00:45 min • Op: Cobranza</p>
+                </div>
+                <button class="px-3 py-1 bg-indigo-600 text-white font-semibold rounded-lg text-[10px]">Atender</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs md:col-span-2 space-y-4">
+            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider border-b border-slate-100 pb-3">Agentes en Línea</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="p-3 border border-slate-200 rounded-xl flex items-center space-x-3 bg-slate-50">
+                <div class="w-9 h-9 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs">LM</div>
+                <div>
+                  <p class="text-xs font-bold text-slate-900">Leonardo Montiel</p>
+                  <span class="text-[10px] text-emerald-600 font-semibold">● En Llamada Activa (04:12)</span>
+                </div>
+              </div>
+              <div class="p-3 border border-slate-200 rounded-xl flex items-center space-x-3 bg-slate-50">
+                <div class="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">AB</div>
+                <div>
+                  <p class="text-xs font-bold text-slate-900">Ana Bracho</p>
+                  <span class="text-[10px] text-slate-500 font-semibold">● Disponible</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
+    <!-- VIEW 5: KANBAN BOARDS -->
+    <div id="view-kanban" class="hidden flex-1 bg-slate-50 p-4 md:p-8 overflow-y-auto">
+      <div class="max-w-7xl mx-auto space-y-6">
+        <div class="flex justify-between items-center">
+          <div>
+            <h1 class="text-xl md:text-2xl font-bold text-slate-900">Tableros Kanban de Incidencias</h1>
+            <p class="text-xs text-slate-500">Gestión visual del flujo de soporte e instalación Tecnoven.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 overflow-x-auto pb-4">
+          <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col h-[600px] shadow-xs">
+            <div class="flex justify-between items-center pb-3 border-b border-slate-200 mb-3 font-bold text-xs p-2 rounded-xl border-amber-400 text-amber-700 bg-amber-50">
+              <span>Por Atender / Ingresados</span>
+              <span class="px-2 py-0.5 bg-white rounded-full text-[10px] shadow-xs">3</span>
+            </div>
+            <div id="kanban-col-new" class="flex-1 space-y-3 overflow-y-auto">
+              <!-- Injected by JS -->
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col h-[600px] shadow-xs">
+            <div class="flex justify-between items-center pb-3 border-b border-slate-200 mb-3 font-bold text-xs p-2 rounded-xl border-indigo-400 text-indigo-700 bg-indigo-50">
+              <span>En Diagnóstico Técnico</span>
+              <span class="px-2 py-0.5 bg-white rounded-full text-[10px] shadow-xs">2</span>
+            </div>
+            <div id="kanban-col-progress" class="flex-1 space-y-3 overflow-y-auto">
+              <!-- Injected by JS -->
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col h-[600px] shadow-xs">
+            <div class="flex justify-between items-center pb-3 border-b border-slate-200 mb-3 font-bold text-xs p-2 rounded-xl border-purple-400 text-purple-700 bg-purple-50">
+              <span>Cuadrilla Asignada</span>
+              <span class="px-2 py-0.5 bg-white rounded-full text-[10px] shadow-xs">1</span>
+            </div>
+            <div id="kanban-col-assigned" class="flex-1 space-y-3 overflow-y-auto">
+              <!-- Injected by JS -->
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col h-[600px] shadow-xs">
+            <div class="flex justify-between items-center pb-3 border-b border-slate-200 mb-3 font-bold text-xs p-2 rounded-xl border-emerald-400 text-emerald-700 bg-emerald-50">
+              <span>Resueltos / Cerrados</span>
+              <span class="px-2 py-0.5 bg-white rounded-full text-[10px] shadow-xs">15</span>
+            </div>
+            <div id="kanban-col-closed" class="flex-1 space-y-3 overflow-y-auto">
+              <!-- Injected by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 6: AI REQUESTS (ÍcaroBot) -->
+    <div id="view-ai" class="hidden flex-1 bg-slate-50 p-4 md:p-8 overflow-y-auto">
+      <div class="max-w-7xl mx-auto space-y-6">
+        <div>
+          <h1 class="text-xl md:text-2xl font-bold text-slate-900">Solicitudes de Inteligencia Artificial</h1>
+          <p class="text-xs text-slate-500">Asistente ÍcaroBot automatizado para diagnósticos de conectividad y facturación.</p>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+          <div class="flex items-center space-x-3 border-b border-slate-100 pb-4">
+            <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg">
+              <i class="fa-solid fa-robot"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Estado del Motor ÍcaroBot v3.5</h3>
+              <p class="text-xs text-emerald-600 font-semibold">● Operacional • 94.2% Autonomía de Respuestas</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <h4 class="font-bold text-slate-800 mb-2">Intentos de Autogestión Hoy</h4>
+              <p class="text-2xl font-extrabold text-indigo-600">384 de 410</p>
+              <p class="text-[11px] text-slate-500 mt-1">Respuestas entregadas sin intervención humana.</p>
+            </div>
+            <div class="p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <h4 class="font-bold text-slate-800 mb-2">Derivaciones a Operador</h4>
+              <p class="text-2xl font-extrabold text-amber-600">26 clientes</p>
+              <p class="text-[11px] text-slate-500 mt-1">Derivados automáticamente por falla física en fibra.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 7: REPORTS MODULE -->
+    <div id="view-reports" class="hidden flex-1 bg-slate-50 p-4 md:p-8 overflow-y-auto">
+      <div class="max-w-7xl mx-auto space-y-6">
+        <div>
+          <h1 class="text-xl md:text-2xl font-bold text-slate-900">Reportes y Métricas Operativas</h1>
+          <p class="text-xs text-slate-500">Exportación de datos de atención al cliente e indicadores SLA Tecnoven.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
+            <i class="fa-solid fa-file-csv text-2xl text-emerald-600"></i>
+            <h3 class="text-sm font-bold text-slate-800">Reporte Diario de Chats</h3>
+            <p class="text-xs text-slate-500">Descarga consolidada en CSV de todos los mensajes procesados hoy.</p>
+            <button onclick="alert('Descargando Reporte CSV...')" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-indigo-600 font-bold text-xs rounded-xl transition">Exportar CSV</button>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
+            <i class="fa-solid fa-file-pdf text-2xl text-rose-600"></i>
+            <h3 class="text-sm font-bold text-slate-800">Métricas SLA Mensuales</h3>
+            <p class="text-xs text-slate-500">Informe en PDF sobre cumplimiento de tiempos de respuesta por operador.</p>
+            <button onclick="alert('Generando Informe PDF...')" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-indigo-600 font-bold text-xs rounded-xl transition">Generar PDF</button>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
+            <i class="fa-solid fa-chart-line text-2xl text-indigo-600"></i>
+            <h3 class="text-sm font-bold text-slate-800">Consumo de Datos por Nodo</h3>
+            <p class="text-xs text-slate-500">Análisis detallado de tráfico por zona en Maracaibo.</p>
+            <button onclick="alert('Abriendo dashboard de red...')" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-indigo-600 font-bold text-xs rounded-xl transition">Ver Análisis</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 8: MASS MESSAGING -->
+    <div id="view-messaging" class="hidden flex-1 bg-slate-50 p-4 md:p-8 overflow-y-auto">
+      <div class="max-w-7xl mx-auto space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <h1 class="text-xl md:text-2xl font-bold text-slate-900">Mensajería Masiva & Difusión</h1>
+            <p class="text-xs text-slate-500">Envío de avisos de cobro y mantenimiento programado vía WhatsApp/SMS.</p>
+          </div>
+          <button onclick="openModal('modal-broadcast')" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-paper-plane text-xs"></i> Nueva Campaña de Difusión
+          </button>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+          <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Historial de Difusiones</h3>
+          <div class="space-y-3 text-xs">
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center">
+              <div>
+                <p class="font-bold text-slate-800">Mantenimiento Programado Nodo Cecilio Acosta</p>
+                <p class="text-slate-500 text-[11px] mt-0.5">Enviado a 420 clientes • 05-11-2026</p>
+              </div>
+              <span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[10px]">Entregado 99.1%</span>
+            </div>
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center">
+              <div>
+                <p class="font-bold text-slate-800">Recordatorio de Pago de Mensualidad</p>
+                <p class="text-slate-500 text-[11px] mt-0.5">Enviado a 1,120 clientes • 01-11-2026</p>
+              </div>
+              <span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[10px]">Entregado 98.4%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 9: SETTINGS MODULE -->
+    <div id="view-settings" class="hidden flex-1 bg-slate-50 p-4 md:p-8 overflow-y-auto">
+      <div class="max-w-4xl mx-auto space-y-6">
+        <div>
+          <h1 class="text-xl md:text-2xl font-bold text-slate-900">Configuración General del Sistema</h1>
+          <p class="text-xs text-slate-500">Parámetros de conexión ICAROSoft y credenciales de API.</p>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5 text-xs">
+          <div class="space-y-3">
+            <h3 class="font-bold text-slate-900 text-sm border-b border-slate-100 pb-2">Integración Servidor Central</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-slate-600 font-semibold mb-1">URL API ICAROSoft</label>
+                <input type="text" value="https://helpdesk.icarosoft.com/api/v2" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-mono" />
+              </div>
+              <div>
+                <label class="block text-slate-600 font-semibold mb-1">Token de Sucursal</label>
+                <input type="password" value="************************" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-mono" />
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-4 border-t border-slate-100 flex justify-end">
+            <button onclick="alert('Configuración guardada correctamente.')" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition">
+              Guardar Cambios
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL: REGISTRAR NUEVO CLIENTE -->
+  <div id="modal-new-client" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <h3 class="text-sm font-bold text-slate-900">Registrar Nuevo Cliente ISP</h3>
+        <button onclick="closeModal('modal-new-client')" class="text-slate-400 hover:text-slate-600 p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <form id="form-add-client" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Nombre Completo / Razón Social</label>
+          <input type="text" id="new-client-name" required placeholder="Ej: CARLOS EDUARDO PEREZ" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 focus:outline-none" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Teléfono WhatsApp</label>
+            <input type="text" id="new-client-phone" required placeholder="584140001122" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Nº Contrato ID</label>
+            <input type="text" id="new-client-contract" required placeholder="TRV-99000" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 focus:outline-none font-mono" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Usuario PPPoE</label>
+            <input type="text" id="new-client-pppoe" required placeholder="user_pppoe" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 focus:outline-none font-mono" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Contraseña PPPoE</label>
+            <input type="text" id="new-client-pass" required placeholder="PassKey123" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 focus:outline-none font-mono" />
+          </div>
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Plan de Conexión</label>
+          <select id="new-client-plan" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:border-indigo-500 focus:outline-none">
+            <option>Fibra Óptica 100 Mbps</option>
+            <option>Fibra Óptica 300 Mbps Pro</option>
+            <option>Fibra Óptica 500 Mbps Business</option>
+          </select>
+        </div>
+        <div class="pt-3 border-t border-slate-100 flex justify-end space-x-2">
+          <button type="button" onclick="closeModal('modal-new-client')" class="px-4 py-2 bg-slate-100 text-slate-600 font-semibold rounded-xl">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl shadow-sm">Guardar Cliente</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: REGISTRO CALL CENTER -->
+  <div id="modal-call-logs" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <h3 class="text-sm font-bold text-slate-900">Historial Reciente Call Center</h3>
+        <button onclick="closeModal('modal-call-logs')" class="text-slate-400 hover:text-slate-600 p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <div class="space-y-2 text-xs max-h-60 overflow-y-auto">
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between">
+          <div>
+            <p class="font-bold text-slate-800">Llamada Entrante - Duración: 03:45</p>
+            <p class="text-slate-500 text-[10px]">Atendido por: Leonardo Montiel</p>
+          </div>
+          <span class="text-emerald-600 font-bold">Finalizada</span>
+        </div>
+      </div>
+      <div class="pt-2 flex justify-end">
+        <button onclick="closeModal('modal-call-logs')" class="px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-xl text-xs">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NUEVA DIFUSIÓN MASIVA -->
+  <div id="modal-broadcast" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <h3 class="text-sm font-bold text-slate-900">Nueva Campaña de Difusión</h3>
+        <button onclick="closeModal('modal-broadcast')" class="text-slate-400 hover:text-slate-600 p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <form onsubmit="event.preventDefault(); alert('Difusión masiva iniciada'); closeModal('modal-broadcast');" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Título de la Campaña</label>
+          <input type="text" required placeholder="Aviso de mantenimiento" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:outline-none" />
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Mensaje de Difusión</label>
+          <textarea rows="3" required placeholder="Estimado cliente, informamos que..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:outline-none"></textarea>
+        </div>
+        <div class="pt-2 flex justify-end space-x-2">
+          <button type="button" onclick="closeModal('modal-broadcast')" class="px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-xl">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl shadow-sm">Iniciar Envíos</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <!-- VANILLA JAVASCRIPT APPLICATION CODE -->
@@ -408,6 +751,7 @@
       activeChatId: 1,
       showRightPanel: false, // Hidden by default on mobile, openable via info button
       showMobileNav: false,
+      visiblePasswords: {}, // Stores visibility state of PPPoE passwords
       notifications: [
         { id: 1, text: 'Nuevo ticket asignado de Nely Balza', time: 'Hace 2 min', read: false },
         { id: 2, text: 'Conversación cambio a PENDIENTE (Imontiel)', time: 'Hace 15 min', read: false }
@@ -424,6 +768,8 @@
           operator: 'Imontiel',
           clientDetails: {
             contractId: 'TRV-89421',
+            pppoeUser: 'nely_balza@tecnoven',
+            pppoePass: 'Nely#2026Net',
             plan: 'Fibra Óptica 300 Mbps Pro',
             status: 'Activo',
             address: 'Urb. La Limpia, Calle 72, Maracaibo',
@@ -455,6 +801,8 @@
           operator: 'Sin Asignar',
           clientDetails: {
             contractId: 'TRV-77312',
+            pppoeUser: 'rcordero_fiber',
+            pppoePass: 'Cordero99#',
             plan: 'Fibra Óptica 100 Mbps',
             status: 'Activo',
             address: 'Sector Amparo, Av. 15, Maracaibo',
@@ -479,6 +827,8 @@
           operator: 'Imontiel',
           clientDetails: {
             contractId: 'TRV-54901',
+            pppoeUser: 'nancy_gonzalez',
+            pppoePass: 'Tecnoven300$',
             plan: 'Fibra Óptica 500 Mbps Business',
             status: 'Activo',
             address: 'Calle 67 Cecilio Acosta, Maracaibo',
@@ -502,6 +852,8 @@
           operator: 'Sin Asignar',
           clientDetails: {
             contractId: 'TRV-33290',
+            pppoeUser: 'clauyelis_e',
+            pppoePass: 'Estrada2026',
             plan: 'Fibra Óptica 150 Mbps',
             status: 'Suspendido (Pago pendiente)',
             address: 'Urb. La Victoria, Maracaibo',
@@ -525,6 +877,8 @@
           operator: 'Sin Asignar',
           clientDetails: {
             contractId: 'TRV-99210',
+            pppoeUser: 'joenny_carmen',
+            pppoePass: 'FiberPass#1',
             plan: 'Fibra Óptica 300 Mbps',
             status: 'Activo',
             address: 'Av. Bella Vista, Maracaibo',
@@ -762,10 +1116,18 @@
       container.scrollTop = container.scrollHeight;
     }
 
+    function togglePasswordVisibility(id) {
+      state.visiblePasswords[id] = !state.visiblePasswords[id];
+      renderRightDrawer();
+      renderClientsTable();
+    }
+
     function renderRightDrawer() {
       const activeChat = state.chats.find(c => c.id === state.activeChatId) || state.chats[0];
       const drawer = document.getElementById('right-details-drawer');
       const backdrop = document.getElementById('mobile-backdrop');
+
+      const isPassVisible = !!state.visiblePasswords[activeChat.id];
 
       // Apply desktop & mobile off-canvas classes
       if (state.showRightPanel) {
@@ -801,6 +1163,30 @@
           <span class="mt-2 inline-block px-3 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
             ${activeChat.clientDetails.status}
           </span>
+        </div>
+
+        <!-- PPPoE Credential Box -->
+        <div class="space-y-2">
+          <h5 class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
+            <i class="fa-solid fa-key"></i> Credenciales PPPoE
+          </h5>
+          <div class="bg-indigo-50/50 rounded-xl p-3 border border-indigo-100 space-y-2 text-xs">
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Usuario PPPoE:</span>
+              <span class="font-mono text-indigo-700 font-bold select-all">${activeChat.clientDetails.pppoeUser || 'user_pppoe'}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-slate-500">Contraseña PPPoE:</span>
+              <div class="flex items-center space-x-1.5">
+                <span class="font-mono text-slate-800 font-semibold">
+                  ${isPassVisible ? (activeChat.clientDetails.pppoePass || 'PassKey123') : '••••••••'}
+                </span>
+                <button onclick="togglePasswordVisibility(${activeChat.id})" class="text-slate-400 hover:text-indigo-600 p-1">
+                  <i class="fa-solid ${isPassVisible ? 'fa-eye-slash' : 'fa-eye'} text-xs"></i>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="space-y-2">
@@ -839,7 +1225,7 @@
         </div>
 
         <div class="pt-2">
-          <button class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-indigo-600 rounded-xl text-xs font-bold border border-slate-200 transition flex items-center justify-center gap-2">
+          <button onclick="alert('Abriendo expediente en servidor central ICAROSoft...')" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-indigo-600 rounded-xl text-xs font-bold border border-slate-200 transition flex items-center justify-center gap-2 cursor-pointer">
             <i class="fa-solid fa-up-right-from-square text-xs"></i> Abrir en ICAROSoft
           </button>
         </div>
@@ -860,26 +1246,105 @@
 
     function renderClientsTable() {
       const container = document.getElementById('clients-table-body');
-      container.innerHTML = state.chats.map(c => `
-        <tr class="hover:bg-slate-50 transition">
-          <td class="p-3 md:p-4">
-            <p class="font-bold text-slate-800">${c.name}</p>
-            <p class="text-slate-400 text-[10px]">${c.clientDetails.contractId}</p>
-          </td>
-          <td class="p-3 md:p-4 text-slate-600">${c.clientDetails.plan}</td>
-          <td class="p-3 md:p-4 font-mono text-indigo-600 font-semibold">${c.clientDetails.ipAddress}</td>
-          <td class="p-3 md:p-4">
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              ${c.clientDetails.status}
-            </span>
-          </td>
-          <td class="p-3 md:p-4 text-right">
-            <button onclick="selectChatAndGo(${c.id})" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-indigo-600 rounded-lg font-semibold transition inline-flex items-center gap-1 text-xs">
-              <i class="fa-regular fa-comment"></i> Chat
-            </button>
-          </td>
-        </tr>
+      container.innerHTML = state.chats.map(c => {
+        const isPassVisible = !!state.visiblePasswords[c.id];
+        return `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 md:p-4">
+              <p class="font-bold text-slate-800">${c.name}</p>
+              <p class="text-slate-400 text-[10px] font-mono">${c.clientDetails.contractId}</p>
+            </td>
+            <td class="p-3 md:p-4 text-slate-600 font-medium">${c.clientDetails.plan}</td>
+            <td class="p-3 md:p-4">
+              <p class="font-mono text-slate-700 font-semibold">${c.clientDetails.pppoeUser || 'user_pppoe'}</p>
+              <div class="flex items-center space-x-1 mt-0.5">
+                <span class="font-mono text-slate-400 text-[10px]">
+                  ${isPassVisible ? (c.clientDetails.pppoePass || 'PassKey123') : '••••••••'}
+                </span>
+                <button onclick="togglePasswordVisibility(${c.id})" class="text-slate-400 hover:text-indigo-600 p-0.5">
+                  <i class="fa-solid ${isPassVisible ? 'fa-eye-slash' : 'fa-eye'} text-[10px]"></i>
+                </button>
+              </div>
+            </td>
+            <td class="p-3 md:p-4 font-mono text-indigo-600 font-semibold">${c.clientDetails.ipAddress}</td>
+            <td class="p-3 md:p-4">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                ${c.clientDetails.status}
+              </span>
+            </td>
+            <td class="p-3 md:p-4 text-right">
+              <button onclick="selectChatAndGo(${c.id})" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-indigo-600 rounded-lg font-semibold transition inline-flex items-center gap-1 text-xs cursor-pointer">
+                <i class="fa-regular fa-comment"></i> Chat
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderDashboardMetrics() {
+      const container = document.getElementById('dashboard-recent-activity');
+      container.innerHTML = state.chats.slice(0, 4).map(c => `
+        <div class="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+          <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
+              ${c.name.substring(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <p class="text-xs font-bold text-slate-800">${c.name}</p>
+              <p class="text-[10px] text-slate-500">${c.department} • ${c.phone}</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            ${c.status.toUpperCase()}
+          </span>
+        </div>
       `).join('');
+    }
+
+    function renderKanbanBoards() {
+      const colNew = document.getElementById('kanban-col-new');
+      const colProgress = document.getElementById('kanban-col-progress');
+      const colAssigned = document.getElementById('kanban-col-assigned');
+      const colClosed = document.getElementById('kanban-col-closed');
+
+      colNew.innerHTML = state.chats.filter(c => c.status === 'new').map(c => `
+        <div onclick="selectChatAndGo(${c.id})" class="p-3 bg-slate-50 rounded-xl border border-slate-200 hover:border-indigo-400 cursor-pointer transition">
+          <p class="font-bold text-slate-800 text-xs">${c.name}</p>
+          <p class="text-[10px] text-slate-500 mt-1">${c.clientDetails.plan}</p>
+        </div>
+      `).join('');
+
+      colProgress.innerHTML = state.chats.filter(c => c.status === 'pending').map(c => `
+        <div onclick="selectChatAndGo(${c.id})" class="p-3 bg-slate-50 rounded-xl border border-slate-200 hover:border-indigo-400 cursor-pointer transition">
+          <p class="font-bold text-slate-800 text-xs">${c.name}</p>
+          <p class="text-[10px] text-indigo-600 font-semibold mt-1">En Diagnóstico</p>
+        </div>
+      `).join('');
+
+      colAssigned.innerHTML = state.chats.filter(c => c.status === 'assigned').map(c => `
+        <div onclick="selectChatAndGo(${c.id})" class="p-3 bg-slate-50 rounded-xl border border-slate-200 hover:border-indigo-400 cursor-pointer transition">
+          <p class="font-bold text-slate-800 text-xs">${c.name}</p>
+          <p class="text-[10px] text-purple-600 font-semibold mt-1">Op: ${c.operator}</p>
+        </div>
+      `).join('');
+
+      colClosed.innerHTML = state.chats.filter(c => c.status === 'closed').map(c => `
+        <div onclick="selectChatAndGo(${c.id})" class="p-3 bg-slate-50 rounded-xl border border-slate-200 hover:border-emerald-400 cursor-pointer transition opacity-75">
+          <p class="font-bold text-slate-800 text-xs line-through">${c.name}</p>
+          <p class="text-[10px] text-emerald-600 font-semibold mt-1">Resuelto</p>
+        </div>
+      `).join('');
+    }
+
+    // MODAL DIALOG CONTROLLERS
+
+    function openModal(modalId) {
+      document.getElementById(modalId).classList.remove('hidden');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.add('hidden');
     }
 
     // RESPONSIVE & MOBILE NAVIGATION HANDLERS
@@ -892,6 +1357,7 @@
       renderChatList();
       renderActiveChatHeader();
       renderMessages();
+      renderRightDrawer();
 
       // In Mobile mode: Hide chat list, Show active chat panel
       if (window.innerWidth < 768) {
@@ -933,31 +1399,29 @@
       renderNav();
       toggleMobileNav(true); // Close mobile nav menu if open
 
-      const helpdeskView = document.getElementById('view-helpdesk');
-      const dashboardView = document.getElementById('view-dashboard');
-      const clientsView = document.getElementById('view-clients');
-      const genericView = document.getElementById('view-generic');
+      const views = ['helpdesk', 'dashboard', 'clients', 'callcenter', 'kanban', 'ai', 'reports', 'messaging', 'settings'];
+      views.forEach(v => {
+        const el = document.getElementById('view-' + v);
+        if (el) el.classList.add('hidden');
+      });
 
-      helpdeskView.classList.add('hidden');
-      dashboardView.classList.add('hidden');
-      clientsView.classList.add('hidden');
-      genericView.classList.add('hidden');
+      const currentEl = document.getElementById('view-' + viewId);
+      if (currentEl) currentEl.classList.remove('hidden');
 
       const headerTitle = document.getElementById('header-view-title');
 
       if (viewId === 'helpdesk') {
-        helpdeskView.classList.remove('hidden');
         headerTitle.innerText = 'Helpdesk & Omnicanalidad';
       } else if (viewId === 'dashboard') {
-        dashboardView.classList.remove('hidden');
+        renderDashboardMetrics();
         headerTitle.innerText = 'Dashboard Ejecutivo';
       } else if (viewId === 'clients') {
-        clientsView.classList.remove('hidden');
         renderClientsTable();
         headerTitle.innerText = 'Directorio de Clientes';
+      } else if (viewId === 'kanban') {
+        renderKanbanBoards();
+        headerTitle.innerText = 'Tableros Kanban';
       } else {
-        genericView.classList.remove('hidden');
-        document.getElementById('generic-view-title').innerText = 'Módulo ' + viewId;
         headerTitle.innerText = 'Módulo ' + viewId;
       }
     }
@@ -988,6 +1452,42 @@
       renderMessages();
       renderRightDrawer();
       renderCannedResponses();
+
+      // Form handler for registering a new client
+      document.getElementById('form-add-client').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const newClient = {
+          id: Date.now(),
+          name: document.getElementById('new-client-name').value,
+          phone: document.getElementById('new-client-phone').value,
+          department: 'Soporte Técnico',
+          timeAgo: 'Justo ahora',
+          unreadCount: 0,
+          status: 'new',
+          operator: 'Sin Asignar',
+          clientDetails: {
+            contractId: document.getElementById('new-client-contract').value,
+            pppoeUser: document.getElementById('new-client-pppoe').value,
+            pppoePass: document.getElementById('new-client-pass').value,
+            plan: document.getElementById('new-client-plan').value,
+            status: 'Activo',
+            address: 'Maracaibo, Zulia',
+            ipAddress: '192.168.1.' + Math.floor(Math.random() * 200 + 10),
+            router: 'ONU Huawei EG8141A5',
+            previousTickets: 0,
+            notes: 'Nuevo cliente registrado desde la plataforma.'
+          },
+          messages: [
+            { id: Date.now(), sender: 'system', text: 'Cliente registrado exitosamente.', timestamp: 'Hoy', status: 'leído' }
+          ]
+        };
+
+        state.chats.unshift(newClient);
+        closeModal('modal-new-client');
+        renderChatList();
+        renderClientsTable();
+        alert('Cliente registrado con éxito.');
+      });
 
       // Mobile search input listener
       document.getElementById('chat-search-input').addEventListener('input', (e) => {
