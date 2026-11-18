@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="SuperKeys: tus contraseñas cifradas, solo en tu dispositivo.">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <meta name="theme-color" content="#4b0e20">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SuperKeys">
+  <meta name="format-detection" content="telephone=no">
+
+  <title>SuperKeys</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="stylesheet" href="styles.css">
+
+  <script src="crypto.js" defer></script>
+  <script src="quotes.js" defer></script>
+  <script src="vault.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+
+  <!-- =================== Pantalla de bloqueo =================== -->
+  <section id="pantalla-bloqueo" class="pantalla">
+    <div class="tarjeta">
+      <div class="marca">
+        <span class="marca-icono" aria-hidden="true">🔐</span>
+        <h1>SuperKeys</h1>
+        <p class="lema">Tus claves, cifradas y solo en tu dispositivo.</p>
+      </div>
+
+      <p id="frase-dia" class="frase"></p>
+
+      <!-- Crear bóveda -->
+      <form id="form-crear" class="formulario oculto" autocomplete="off" novalidate>
+        <p class="intro">Crea tu bóveda. La contraseña maestra cifra todo y no se guarda en ningún sitio.</p>
+
+        <label for="nueva-maestra">Contraseña maestra</label>
+        <div class="campo-clave">
+          <input id="nueva-maestra" type="password" autocomplete="new-password" minlength="8" required>
+          <button type="button" class="ojo" data-ver="nueva-maestra" aria-label="Mostrar contraseña">👁️</button>
+        </div>
+
+        <div class="medidor" aria-hidden="true"><span id="medidor-barra"></span></div>
+        <small id="medidor-texto" class="medidor-texto">Mínimo 8 caracteres.</small>
+
+        <label for="repetir-maestra">Repite la contraseña</label>
+        <input id="repetir-maestra" type="password" autocomplete="new-password" minlength="8" required>
+
+        <p class="aviso">⚠️ Si olvidas esta contraseña no hay forma de recuperar tus datos. Descarga un respaldo cuando puedas.</p>
+
+        <button class="boton primario" type="submit">Crear bóveda</button>
+      </form>
+
+      <!-- Desbloquear -->
+      <form id="form-desbloquear" class="formulario oculto" autocomplete="off" novalidate>
+        <label for="maestra">Contraseña maestra</label>
+        <div class="campo-clave">
+          <input id="maestra" type="password" autocomplete="current-password" required>
+          <button type="button" class="ojo" data-ver="maestra" aria-label="Mostrar contraseña">👁️</button>
+        </div>
+        <button class="boton primario" type="submit">Desbloquear</button>
+        <p id="racha-texto" class="racha"></p>
+      </form>
+
+      <p id="error-bloqueo" class="error" role="alert"></p>
+    </div>
+  </section>
+
+  <!-- ========================= App abierta ========================= -->
+  <main id="app" class="app oculto">
+    <header class="cabecera">
+      <div class="marca-mini"><span aria-hidden="true">🔐</span> SuperKeys</div>
+      <div class="acciones-cabecera">
+        <button id="btn-generador" class="boton-icono" type="button" title="Generador" aria-label="Generador de contraseñas">🎲</button>
+        <button id="btn-ajustes" class="boton-icono" type="button" title="Ajustes" aria-label="Ajustes">⚙️</button>
+        <button id="btn-bloquear" class="boton-icono" type="button" title="Bloquear" aria-label="Bloquear ahora">🔒</button>
+      </div>
+    </header>
+
+    <div class="barra-superior">
+      <input id="buscar" class="buscador" type="search" placeholder="Buscar por título, usuario o sitio" autocomplete="off">
+      <div id="filtros" class="filtros" role="group" aria-label="Filtros"></div>
+    </div>
+
+    <p id="resumen" class="resumen"></p>
+
+    <div id="lista" class="lista" aria-live="polite"></div>
+
+    <button id="btn-nueva" class="fab" type="button" aria-label="Nueva contraseña">＋</button>
+  </main>
+
+  <!-- ===================== Modal: ver entrada ===================== -->
+  <div id="modal-ver" class="modal oculto" role="dialog" aria-modal="true" aria-labelledby="ver-titulo">
+    <div class="caja">
+      <header class="caja-cabecera">
+        <h2 id="ver-titulo">Entrada</h2>
+        <button type="button" class="boton-icono" data-cerrar="modal-ver" aria-label="Cerrar">✕</button>
+      </header>
+
+      <dl class="detalle">
+        <dt>Usuario</dt>
+        <dd id="ver-usuario"></dd>
+        <dt>Contraseña</dt>
+        <dd class="detalle-clave">
+          <span id="ver-password" class="clave-oculta">••••••••</span>
+          <button type="button" class="boton-icono" id="btn-ver-ojo" title="Mostrar / ocultar">👁️</button>
+        </dd>
+        <dt>Sitio</dt>
+        <dd id="ver-sitio"></dd>
+        <dt>Categoría</dt>
+        <dd id="ver-categoria"></dd>
+        <dt>Notas</dt>
+        <dd id="ver-notas" class="detalle-notas"></dd>
+      </dl>
+
+      <div class="caja-acciones">
+        <button type="button" class="boton" id="ver-copiar-usuario">Copiar usuario</button>
+        <button type="button" class="boton primario" id="ver-copiar-password">Copiar contraseña</button>
+        <button type="button" class="boton" id="ver-editar">Editar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Modal: crear / editar ==================== -->
+  <div id="modal-item" class="modal oculto" role="dialog" aria-modal="true" aria-labelledby="item-titulo">
+    <div class="caja">
+      <header class="caja-cabecera">
+        <h2 id="item-titulo">Nueva contraseña</h2>
+        <button type="button" class="boton-icono" data-cerrar="modal-item" aria-label="Cerrar">✕</button>
+      </header>
+
+      <form id="form-item" class="formulario" autocomplete="off" novalidate>
+        <label for="item-titulo-campo">Título *</label>
+        <input id="item-titulo-campo" type="text" required placeholder="Banco, correo, WiFi…">
+
+        <label for="item-usuario">Usuario o correo</label>
+        <input id="item-usuario" type="text" autocomplete="off" autocapitalize="none">
+
+        <label for="item-password">Contraseña</label>
+        <div class="campo-clave">
+          <input id="item-password" type="text" autocomplete="off" autocapitalize="none" spellcheck="false">
+          <button type="button" class="ojo" id="item-generar" title="Generar una contraseña">🎲</button>
+        </div>
+        <div class="medidor" aria-hidden="true"><span id="item-medidor"></span></div>
+
+        <label for="item-sitio">Sitio o app</label>
+        <input id="item-sitio" type="text" inputmode="url" autocapitalize="none" placeholder="ejemplo.com">
+
+        <label for="item-categoria">Categoría</label>
+        <select id="item-categoria">
+          <option>General</option>
+          <option>Trabajo</option>
+          <option>Personal</option>
+          <option>Banco</option>
+          <option>Redes</option>
+          <option>Otros</option>
+        </select>
+
+        <label for="item-notas">Notas</label>
+        <textarea id="item-notas" rows="2" placeholder="Opcional"></textarea>
+
+        <label class="fila-check">
+          <input id="item-favorito" type="checkbox">
+          <span>Marcar como favorita ⭐</span>
+        </label>
+
+        <div class="caja-acciones">
+          <button type="button" class="boton" data-cerrar="modal-item">Cancelar</button>
+          <button type="submit" class="boton primario">Guardar</button>
+        </div>
+        <button type="button" class="boton peligro oculto" id="item-eliminar">Eliminar esta entrada</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================= Modal: generador ========================= -->
+  <div id="modal-generador" class="modal oculto" role="dialog" aria-modal="true" aria-labelledby="generador-titulo">
+    <div class="caja">
+      <header class="caja-cabecera">
+        <h2 id="generador-titulo">Generador</h2>
+        <button type="button" class="boton-icono" data-cerrar="modal-generador" aria-label="Cerrar">✕</button>
+      </header>
+
+      <p id="generador-resultado" class="generador-resultado" aria-live="polite"></p>
+
+      <label for="generador-longitud">Longitud: <strong id="generador-longitud-valor">20</strong></label>
+      <input id="generador-longitud" type="range" min="8" max="64" value="20">
+
+      <label class="fila-check"><input id="generador-mayusculas" type="checkbox" checked><span>Mayúsculas</span></label>
+      <label class="fila-check"><input id="generador-numeros" type="checkbox" checked><span>Números</span></label>
+      <label class="fila-check"><input id="generador-simbolos" type="checkbox" checked><span>Símbolos</span></label>
+      <label class="fila-check"><input id="generador-ambiguos" type="checkbox" checked><span>Evitar caracteres confusos (l, 1, O, 0)</span></label>
+
+      <div class="caja-acciones">
+        <button type="button" class="boton" id="generador-regenerar">Regenerar</button>
+        <button type="button" class="boton primario" id="generador-copiar">Copiar</button>
+      </div>
+      <button type="button" class="boton oculto" id="generador-usar">Usar en el formulario</button>
+    </div>
+  </div>
+
+  <!-- ========================== Modal: ajustes ========================== -->
+  <div id="modal-ajustes" class="modal oculto" role="dialog" aria-modal="true" aria-labelledby="ajustes-titulo">
+    <div class="caja">
+      <header class="caja-cabecera">
+        <h2 id="ajustes-titulo">Ajustes</h2>
+        <button type="button" class="boton-icono" data-cerrar="modal-ajustes" aria-label="Cerrar">✕</button>
+      </header>
+
+      <label for="ajuste-tema">Tema</label>
+      <select id="ajuste-tema">
+        <option value="auto">Automático (sistema)</option>
+        <option value="claro">Claro</option>
+        <option value="oscuro">Oscuro</option>
+      </select>
+
+      <label for="ajuste-acento">Color de acento</label>
+      <select id="ajuste-acento">
+        <option value="vino">Vino</option>
+        <option value="azul">Azul</option>
+        <option value="verde">Verde</option>
+        <option value="ambar">Ámbar</option>
+      </select>
+
+      <label for="ajuste-bloqueo">Bloquear por inactividad</label>
+      <select id="ajuste-bloqueo">
+        <option value="2">2 minutos</option>
+        <option value="5">5 minutos</option>
+        <option value="15">15 minutos</option>
+        <option value="0">Nunca</option>
+      </select>
+
+      <label for="ajuste-portapapeles">Vaciar el portapapeles</label>
+      <select id="ajuste-portapapeles">
+        <option value="15">A los 15 segundos</option>
+        <option value="30">A los 30 segundos</option>
+        <option value="60">A los 60 segundos</option>
+        <option value="0">Nunca</option>
+      </select>
+
+      <label class="fila-check"><input id="ajuste-ocultar" type="checkbox"><span>Bloquear al cambiar de pestaña</span></label>
+      <label class="fila-check"><input id="ajuste-mensajes" type="checkbox"><span>Mostrar mensajes motivacionales</span></label>
+
+      <hr>
+
+      <h3 class="subtitulo">Respaldo</h3>
+      <p class="texto-pequeno">El respaldo va cifrado con tu contraseña maestra. Guárdalo en un lugar seguro.</p>
+      <div class="caja-acciones">
+        <button type="button" class="boton" id="btn-exportar">Exportar respaldo</button>
+        <button type="button" class="boton" id="btn-importar">Importar respaldo</button>
+      </div>
+      <input type="file" id="archivo-respaldo" accept=".json,.superkeys,application/json" class="oculto">
+
+      <hr>
+
+      <button type="button" class="boton peligro" id="btn-borrar-boveda">Borrar la bóveda de este dispositivo</button>
+      <p class="texto-pequeno">Se elimina todo lo guardado aquí. No afecta a tus respaldos.</p>
+    </div>
+  </div>
+
+  <!-- ========================= Modal: novedades ========================= -->
+  <div id="modal-novedades" class="modal oculto" role="dialog" aria-modal="true" aria-labelledby="novedades-titulo">
+    <div class="caja">
+      <header class="caja-cabecera">
+        <h2 id="novedades-titulo">🚀 SuperKeys 1.0</h2>
+        <button type="button" class="boton-icono" data-cerrar="modal-novedades" aria-label="Cerrar">✕</button>
+      </header>
+      <ul class="lista-novedades">
+        <li><strong>Bóveda cifrada:</strong> PBKDF2 + AES-GCM; sin la contraseña maestra no se puede leer nada.</li>
+        <li><strong>Copiar sin dejar rastro:</strong> el portapapeles se vacía solo a los 30 segundos.</li>
+        <li><strong>Generador y fuerza:</strong> contraseñas seguras y aviso de las débiles o repetidas.</li>
+        <li><strong>Temas:</strong> claro, oscuro o automático, con cuatro colores de acento.</li>
+        <li><strong>Respaldo cifrado:</strong> exporta e importa cuando quieras.</li>
+        <li><strong>Funciona sin conexión:</strong> instálala en tu iPhone desde Compartir → Añadir a inicio.</li>
+      </ul>
+      <button type="button" class="boton primario" data-cerrar="modal-novedades">Entendido</button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+</body>
+</html>
