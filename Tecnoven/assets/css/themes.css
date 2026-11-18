@@ -3,8 +3,20 @@
    ========================================================================== */
 
 body.dark-mode {
+  --focus: #f0b9c9;
   background: linear-gradient(160deg, #181818, #222 100%);
   color: #eee;
+}
+
+body.dark-mode .menu-toggle {
+  border-color: #8f1d3f;
+  background: var(--vino-2);
+  color: #fff;
+}
+
+body.dark-mode .menu-toggle:hover {
+  border-color: #a82450;
+  background: #8f1d3f;
 }
 
 body.dark-mode .main-content,
