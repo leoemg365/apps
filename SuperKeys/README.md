@@ -29,13 +29,15 @@ El portapapeles se vacía solo a los 30 segundos por defecto, y la bóveda se bl
 5 minutos de inactividad. Bloquear al cambiar de pestaña es opcional y viene **desactivado**,
 para que puedas copiar una clave y pegarla en otra app sin que se cierre.
 
-## Instalarla en el iPhone
+## Instalarla
 
-1. Abre la URL en **Safari**.
-2. Compartir → **Añadir a pantalla de inicio**.
-3. Ábrela desde el icono: se ejecuta a pantalla completa y sin conexión.
+- **Android (Chrome / Edge):** al abrir la app aparece el aviso **«Instalar la app»**; también
+  está en el menú ⋮ → *Instalar aplicación*. Si eliges «Ahora no», no vuelve a insistir en
+  ese navegador.
+- **iPhone (Safari):** **Compartir** → **Añadir a pantalla de inicio**. Si aún no está
+  instalada, la pantalla de inicio de sesión muestra el recordatorio.
 
-Instalarla también evita que Safari borre el almacenamiento del sitio por falta de uso.
+Instalarla en el iPhone también evita que Safari borre el almacenamiento del sitio por falta de uso.
 
 ## Respaldo
 

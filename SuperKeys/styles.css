@@ -43,10 +43,13 @@ body[data-acento="ambar"] { --acento: #b7791f; --acento-fuerte: #8f5c12; --acent
 
 html, body { min-height: 100%; }
 
+html { -webkit-text-size-adjust: 100%; }
+
 body {
   margin: 0;
   min-height: 100vh;
   min-height: 100dvh;
+  overflow-x: hidden;
   background: var(--fondo);
   color: var(--texto);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
@@ -55,7 +58,18 @@ body {
   padding: var(--seguro-arriba) 0 var(--seguro-abajo);
 }
 
+/* Con un modal abierto, el fondo queda bloqueado (también en iOS) */
+body.modal-abierto {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
 .oculto { display: none !important; }
+
+button, .boton, .chip, .fab { touch-action: manipulation; }
 
 /* ------------------------------- Marca ---------------------------------- */
 
@@ -145,6 +159,23 @@ textarea { resize: vertical; min-height: 52px; }
 
 .error { min-height: 1.2em; margin: 8px 0 0; color: var(--peligro); font-size: 0.85rem; font-weight: 700; text-align: center; }
 .racha { margin: 10px 0 0; text-align: center; font-size: 0.8rem; color: var(--texto-suave); }
+
+.creditos { margin: 16px 0 0; text-align: center; font-size: 0.75rem; color: var(--texto-suave); }
+.creditos strong { color: var(--texto); }
+
+.instalar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px dashed var(--borde);
+  border-radius: var(--radio-sm);
+  background: var(--fondo);
+}
+
+.instalar-acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+.instalar-acciones .boton { flex: 1 1 130px; }
 
 /* -------------------------------- Botones -------------------------------- */
 
@@ -267,6 +298,8 @@ hr { width: 100%; height: 0; margin: 14px 0; border: 0; border-top: 1px solid va
   align-items: flex-end;
   justify-content: center;
   padding: 0;
+  overflow: hidden;
+  overscroll-behavior: contain;
   background: rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(2px);
 }
@@ -276,6 +309,8 @@ hr { width: 100%; height: 0; margin: 14px 0; border: 0; border-top: 1px solid va
   max-height: 92vh;
   max-height: 92dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 18px 18px calc(18px + var(--seguro-abajo));
   border-radius: 22px 22px 0 0;
   background: var(--fondo-2);

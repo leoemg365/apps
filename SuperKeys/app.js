@@ -24,7 +24,10 @@
     claveVisible: false,
     temporizadorBloqueo: null,
     temporizadorPortapapeles: null,
-    ultimaActividad: 0
+    ultimaActividad: 0,
+    bloqueos: 0,
+    scrollY: 0,
+    instalacion: null
   };
 
   /* ------------------------------- Utilidades ------------------------------ */
@@ -49,12 +52,44 @@
 
   function abrirModal(id) {
     const modal = $(id);
-    if (modal) modal.classList.remove('oculto');
+    if (!modal || !modal.classList.contains('oculto')) return;
+
+    modal.classList.remove('oculto');
+    bloquearFondo();
   }
 
   function cerrarModal(id) {
     const modal = $(id);
-    if (modal) modal.classList.add('oculto');
+    if (!modal || modal.classList.contains('oculto')) return;
+
+    modal.classList.add('oculto');
+    liberarFondo();
+  }
+
+  /* ------------------------------ Fondo fijo ------------------------------- */
+  /* Al abrir un modal se congela la pantalla de atrás, también en iOS. */
+
+  function bloquearFondo() {
+    if (estado.bloqueos > 0) {
+      estado.bloqueos += 1;
+      return;
+    }
+
+    estado.scrollY = global.scrollY || 0;
+    document.body.style.top = '-' + estado.scrollY + 'px';
+    document.body.classList.add('modal-abierto');
+    estado.bloqueos = 1;
+  }
+
+  function liberarFondo() {
+    if (estado.bloqueos === 0) return;
+
+    estado.bloqueos -= 1;
+    if (estado.bloqueos > 0) return;
+
+    document.body.classList.remove('modal-abierto');
+    document.body.style.top = '';
+    global.scrollTo(0, estado.scrollY || 0);
   }
 
   function leerPreferencias() {
@@ -193,7 +228,7 @@
     $('maestra').value = '';
     $('error-bloqueo').textContent = '';
 
-    ['modal-ver', 'modal-item', 'modal-generador', 'modal-ajustes'].forEach(cerrarModal);
+    ['modal-novedades', 'modal-ver', 'modal-item', 'modal-generador', 'modal-ajustes'].forEach(cerrarModal);
 
     prepararPantallaBloqueo();
 
@@ -607,6 +642,78 @@
     toast('Bóveda eliminada');
   }
 
+  /* ------------------------------ Instalación ------------------------------ */
+
+  function esStandalone() {
+    if (global.navigator.standalone === true) return true;
+    return !!(global.matchMedia && global.matchMedia('(display-mode: standalone)').matches);
+  }
+
+  function esIOS() {
+    return /iphone|ipad|ipod/i.test(global.navigator.userAgent || '');
+  }
+
+  /** Android/Chrome: usa el aviso nativo. iOS: explica cómo añadir a inicio. */
+  function mostrarInstalacion() {
+    if (esStandalone()) return;
+    if (localStorage.getItem('superkeys.instalar') === 'oculto') return;
+
+    const caja = $('instalar');
+    const texto = $('instalar-texto');
+    const boton = $('btn-instalar');
+    if (!caja || !texto || !boton) return;
+
+    if (estado.instalacion) {
+      texto.textContent = 'Instala SuperKeys para abrirla sin navegador y sin conexión.';
+      boton.classList.remove('oculto');
+    } else if (esIOS()) {
+      texto.textContent = 'En iPhone: toca Compartir y elige «Añadir a pantalla de inicio».';
+      boton.classList.add('oculto');
+    } else {
+      return;
+    }
+
+    caja.classList.remove('oculto');
+  }
+
+  function ocultarInstalacion(recordar) {
+    const caja = $('instalar');
+    if (caja) caja.classList.add('oculto');
+    if (recordar) localStorage.setItem('superkeys.instalar', 'oculto');
+  }
+
+  async function instalarApp() {
+    const evento = estado.instalacion;
+    if (!evento) return;
+
+    evento.prompt();
+
+    try {
+      const eleccion = await evento.userChoice;
+      estado.instalacion = null;
+      ocultarInstalacion(eleccion && eleccion.outcome === 'dismissed');
+    } catch (error) {
+      estado.instalacion = null;
+      ocultarInstalacion(false);
+    }
+  }
+
+  function iniciarInstalacion() {
+    global.addEventListener('beforeinstallprompt', (evento) => {
+      evento.preventDefault();
+      estado.instalacion = evento;
+      mostrarInstalacion();
+    });
+
+    global.addEventListener('appinstalled', () => {
+      estado.instalacion = null;
+      ocultarInstalacion(true);
+      toast('¡App instalada! 🎉');
+    });
+
+    mostrarInstalacion();
+  }
+
   /* -------------------------------- Eventos -------------------------------- */
 
   function unirEventos() {
@@ -712,9 +819,23 @@
 
     document.querySelectorAll('.modal').forEach((modal) => {
       modal.addEventListener('click', (evento) => {
-        if (evento.target === modal) modal.classList.add('oculto');
+        if (evento.target === modal) cerrarModal(modal.id);
       });
     });
+
+    // Escape cierra el modal abierto (escritorio)
+    document.addEventListener('keydown', (evento) => {
+      if (evento.key !== 'Escape') return;
+
+      ['modal-novedades', 'modal-ajustes', 'modal-generador', 'modal-item', 'modal-ver'].forEach((id) => {
+        const modal = $(id);
+        if (modal && !modal.classList.contains('oculto')) cerrarModal(id);
+      });
+    });
+
+    // Instalación de la app
+    $('btn-instalar').addEventListener('click', instalarApp);
+    $('btn-instalar-cerrar').addEventListener('click', () => ocultarInstalacion(true));
 
     // Ver entrada
     $('btn-ver-ojo').addEventListener('click', alternarClaveVer);
@@ -788,6 +909,7 @@
     iniciarTema();
     unirEventos();
     prepararPantallaBloqueo();
+    iniciarInstalacion();
 
     if (global.matchMedia && global.matchMedia('(display-mode: standalone)').matches) {
       document.documentElement.classList.add('pwa');
