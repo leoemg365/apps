@@ -1,17 +1,20 @@
-const versionActual = "1.3"; // Cambia esto cada vez que actualices tu web
+const versionActual = "1.4"; // Cambia esto cada vez que actualices tu web
 const modal = document.getElementById("modalActualizaciones");
 const btnCerrar = document.getElementById("cerrarActualizacion");
 
 window.addEventListener("load", () => {
+    if (!modal) return;
     // Verificamos si el usuario ya vio esta versión específica
     const ultimaVersionVista = localStorage.getItem("versionVista");
 
     if (ultimaVersionVista !== versionActual) {
-        modal.showModal(); // Método nativo para abrir dialog
+        try { modal.showModal(); } catch (e) {}
     }
 });
 
-btnCerrar.onclick = () => {
-    modal.close(); // Cierra el modal
-    localStorage.setItem("versionVista", versionActual); // Guarda que ya se vio
-};
+if (btnCerrar && modal) {
+    btnCerrar.onclick = () => {
+        modal.close(); // Cierra el modal
+        localStorage.setItem("versionVista", versionActual); // Guarda que ya se vio
+    };
+}

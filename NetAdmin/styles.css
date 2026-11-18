@@ -195,3 +195,130 @@
         @media (max-width: 768px) {
         .hide-mobile {
         display: none !important;} }
+
+        /* ===== Copias recientes (panel lateral) ===== */
+        .recientes-tab {
+            position: fixed;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1501;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            padding: 12px 7px;
+            border: 1px solid var(--border);
+            border-right: none;
+            border-radius: 12px 0 0 12px;
+            background: var(--bg-surface);
+            color: var(--text-main);
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 0.75rem;
+            box-shadow: -3px 0 10px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            transition: transform 0.25s ease, background 0.2s;
+        }
+        .recientes-tab:hover { background: var(--bg-input); }
+        .recientes.abierto .recientes-tab { transform: translate(130%, -50%); }
+        .recientes-tab-icon { font-size: 1.1rem; }
+        .recientes-tab-text { writing-mode: vertical-rl; letter-spacing: 1px; }
+        .recientes-count {
+            background: var(--primary);
+            color: #fff;
+            font-size: 0.65rem;
+            padding: 1px 6px;
+            border-radius: 8px;
+        }
+
+        .recientes-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            z-index: 1500;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: min(340px, 90vw);
+            height: 100%;
+            padding: 15px;
+            border-left: 1px solid var(--border);
+            background: var(--bg-surface);
+            box-shadow: -6px 0 24px rgba(0, 0, 0, 0.2);
+            transform: translateX(105%);
+            transition: transform 0.25s ease;
+        }
+        .recientes-panel.open { transform: none; }
+
+        .recientes-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            font-size: 1rem;
+        }
+        .recientes-hint { display: block; margin-top: 2px; font-size: 0.75rem; color: var(--text-sec); font-weight: normal; }
+        .recientes-head-btns { display: flex; gap: 4px; }
+        .recientes-head-btns .mini-btn { background: var(--bg-input); }
+
+        .recientes-lista {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+
+        .reciente-item {
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--primary);
+            border-radius: 10px;
+            background: var(--bg-body);
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        .reciente-item:hover { background: var(--bg-input); }
+        .reciente-item:active { transform: scale(0.98); }
+        .reciente-item.es-respuesta { border-left-color: var(--success); }
+
+        .reciente-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .reciente-label { font-weight: bold; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .reciente-meta { font-size: 0.7rem; color: var(--text-sec); white-space: nowrap; }
+        .reciente-texto {
+            margin-top: 4px;
+            max-height: 3.6em;
+            overflow: hidden;
+            font-family: monospace;
+            font-size: 0.78rem;
+            line-height: 1.35;
+            color: var(--text-sec);
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+        .reciente-actions { display: flex; justify-content: flex-end; gap: 4px; margin-top: 6px; }
+        .reciente-actions .mini-btn { background: var(--bg-surface); }
+
+        .recientes-vacio { padding: 24px 10px; color: var(--text-sec); font-size: 0.85rem; line-height: 1.5; text-align: center; }
+
+        .recientes-foot {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding-top: 8px;
+            border-top: 1px solid var(--border);
+            font-size: 0.75rem;
+            color: var(--text-sec);
+        }
+        .recientes-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+        @media (max-width: 480px) {
+            .recientes-tab { padding: 10px 5px; }
+            .recientes-tab-text { display: none; }
+            .recientes-panel { width: min(320px, 92vw); }
+        }

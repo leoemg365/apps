@@ -394,6 +394,42 @@
             </div>
         </div>
 
+        <!-- Copias recientes: panel lateral con sugerencias -->
+        <div id="recientes" class="recientes">
+            <button id="recientes-tab" class="recientes-tab" type="button" onclick="toggleRecientes()"
+                aria-expanded="false" aria-controls="recientes-panel" title="Copias recientes">
+                <span class="recientes-tab-icon">📋</span>
+                <span class="recientes-tab-text">Recientes</span>
+                <span id="recientes-count" class="recientes-count" style="display:none">0</span>
+            </button>
+
+            <aside id="recientes-panel" class="recientes-panel" aria-hidden="true" aria-label="Copias recientes">
+                <header class="recientes-head">
+                    <div>
+                        <strong>Copias recientes</strong>
+                        <small class="recientes-hint">Toca una para volver a pegarla</small>
+                    </div>
+                    <div class="recientes-head-btns">
+                        <button type="button" class="mini-btn" onclick="capturarPortapapeles()"
+                            title="Capturar lo que tengas en el portapapeles">📥</button>
+                        <button type="button" class="mini-btn" onclick="limpiarRecientes()"
+                            title="Vaciar historial">🧹</button>
+                        <button type="button" class="mini-btn" onclick="toggleRecientes(false)"
+                            title="Ocultar">✕</button>
+                    </div>
+                </header>
+
+                <div id="recientes-lista" class="recientes-lista"></div>
+
+                <footer class="recientes-foot">
+                    <label class="recientes-toggle" title="Muestra primero lo copiado en la pestaña activa">
+                        <input type="checkbox" id="recientes-contexto" onchange="guardarPreferenciaRecientes()" checked>
+                        <span>Priorizar pestaña activa</span>
+                    </label>
+                </footer>
+            </aside>
+        </div>
+
         <footer style="text-align:center; color:var(--text-sec); margin-top:40px; font-size:0.9em; opacity:0.8;">
             NetAdmin Soporte Pro v18.0<br>© 2026 Espiral - Leonardo Montiel<br>
             <a href="https://wa.me/584121982608" target="_blank" style="text-decoration:none; display:inline-block; margin-top:12px;">
@@ -475,13 +511,15 @@
     <dialog id="modalActualizaciones">
     <h2>🚀 ¡Nuevas funciones disponibles!</h2>
     <ul>
-        <li><b>Velocidad:</b> Hemos optimizado la carga un 100%.</li>
-        <li><b>Monitoreo:</b> Monitoreo de nodos</li>
-        <li><b>Reportes:</b> Nuevos campos para reportes de Inversores</li>
-        <li><b>Usabilidad:</b> Ahora se guarda la pestaña activa</li>
+        <li><b>Copias recientes:</b> panel lateral con las últimas 4 copias; toca una para volver a pegarla.</li>
+        <li><b>Sugerencias inteligentes:</b> muestra primero lo que copiaste en la pestaña activa (Respuestas, Links o Contraseñas).</li>
+        <li><b>Más usado, más arriba:</b> si repites un texto, sube solo y lleva su contador de usos.</li>
+        <li><b>Portapapeles externo:</b> con 📥 traes lo último que copiaste fuera de la app.</li>
+        <li><b>Se recuerda:</b> el panel abierto/cerrado y el historial quedan guardados en este navegador.</li>
     </ul>
     <button id="cerrarActualizacion">Entendido, ¡gracias!</button>
 </dialog>
+<script src="recientes.js" defer></script>
 <script src="modalupdate.js"></script>
 </body>
 </html>

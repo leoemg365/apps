@@ -23,7 +23,7 @@
         let currentToolMode = 'rep'; 
         
         let dailyExitTime = null; let alarmTriggered = false; const alarmAudio = document.getElementById('alarm-sound');
-        let formCallback = null; let confirmCallback = null; let textToCopyFromPreview = "";
+        let formCallback = null; let confirmCallback = null; let textToCopyFromPreview = ""; let previewTitleActual = "";
         
         // REPORTE 5 VARIABLES
         let currentRepMode = 1; let r4Status = 'PRESENTADA'; let finalReportAsterisks = "";
@@ -395,7 +395,7 @@
                 list.cards.forEach((c, cIdx) => {
                     const d = document.createElement('div');
                     let actHtml = `<div class="actions">${getMoveBtnsHtml(type, lIdx, cIdx, list.cards.length)}<button class="mini-btn" title="Ver completo" onclick="event.stopPropagation(); openPreview('${c.label}', \`${type==='passwords' ? `Usuario: ${c.user}\nClave: ${c.pass}` : c.content}\`, \`${type==='passwords'? c.pass : c.content}\`)">👁️</button>${isAdmin ? `<button class="mini-btn" onclick="event.stopPropagation(); reqAdminEditCard('${type}',${lIdx},${cIdx})">✏️</button><button class="mini-btn" style="color:var(--danger);" onclick="event.stopPropagation(); reqAdminDel(()=>delCard('${type}',${lIdx},${cIdx}))">🗑️</button>` : ''}</div>`;
-                    if(type==='clipboard') { d.className='card'; d.onclick=()=>copy(c.content); d.innerHTML=`<div class="card-label">${c.label}</div><div class="card-val">${c.content}</div>${actHtml}`; } 
+                    if(type==='clipboard') { d.className='card'; d.onclick=()=>copy(c.content, {etiqueta: c.label, origen: 'link'}); d.innerHTML=`<div class="card-label">${c.label}</div><div class="card-val">${c.content}</div>${actHtml}`; } 
                     else { d.className='card pass-card'; d.innerHTML=`<div class="card-label">${c.label}</div><div class="cred-row"><span>👤 <strong style="color:var(--text-main)">${c.user}</strong></span><button class="mini-btn" style="width:auto; padding:2px 8px" onclick="event.stopPropagation(); copy('${c.user}')">Copiar</button></div><div class="cred-row"><span class="blur">🔑 <strong>${c.pass}</strong></span><button class="mini-btn" style="width:auto; padding:2px 8px" onclick="event.stopPropagation(); copy('${c.pass}')">Copiar</button></div>${actHtml}`; }
                     grid.appendChild(d);
                 });
@@ -416,7 +416,7 @@
                     if(c.subcat) subcats.add(c.subcat);
                     if(currentRespFilterSub !== 'Todas' && c.subcat !== currentRespFilterSub) return;
 
-                    const d = document.createElement('div'); d.className = `card resp-card color-${c.color || 'neutro'}`; d.onclick=()=>copy(c.content);
+                    const d = document.createElement('div'); d.className = `card resp-card color-${c.color || 'neutro'}`; d.onclick=()=>copy(c.content, {etiqueta: c.label, origen: 'respuesta'});
                     let actHtml = `<div class="actions">${getMoveBtnsHtml('responses', lIdx, cIdx, targetList.cards.length)}<button class="mini-btn" onclick="event.stopPropagation(); openPreview('${c.label}', \`${c.content}\`, \`${c.content}\`)">👁️</button>${isAdmin ? `<button class="mini-btn" onclick="event.stopPropagation(); reqAdminEditCardResp(${lIdx},${cIdx})">✏️</button><button class="mini-btn" style="color:var(--danger);" onclick="event.stopPropagation(); reqAdminDel(()=>delCardResp(${lIdx},${cIdx}))">🗑️</button>` : ''}</div>`;
                     let subBadge = c.subcat && c.subcat !== 'General' ? `<span style="font-size:0.7rem; color:var(--text-sec); display:block; margin-bottom:2px">📁 ${c.subcat}</span>` : '';
                     d.innerHTML = `${subBadge}<div class="card-label">${c.label}</div><div class="card-val">${c.content}</div>${actHtml}`; grid.appendChild(d);
@@ -544,7 +544,7 @@
             document.getElementById('ocr-instructions').style.display = 'block'; document.getElementById('ocr-result').value = '';
             document.getElementById('ocr-status').innerHTML = ''; document.getElementById('ocr-bar').style.display = 'none'; document.getElementById('ocr-progress').style.width = '0%';
         }
-        function copyOCR() { copy(document.getElementById('ocr-result').value); }
+        function copyOCR() { copy(document.getElementById('ocr-result').value, {etiqueta: 'Texto OCR', origen: 'herramienta'}); }
         function sendOCRtoFmt() { document.getElementById('tool-text').value = document.getElementById('ocr-result').value; switchToolMode('fmt'); updateTextTools(); }
 
         // --- REPORTES ---
@@ -723,21 +723,21 @@
             document.getElementById('live-preview-box').innerHTML = htmlText; finalReportAsterisks = plainText; 
         }
 
-        function copyGeneratedReport() { if(finalReportAsterisks) copy(finalReportAsterisks); }
+        function copyGeneratedReport() { if(finalReportAsterisks) copy(finalReportAsterisks, {etiqueta: 'Reporte generado', origen: 'reporte'}); }
 
         function updateTextTools() { const text = document.getElementById('tool-text').value; document.getElementById('char-count').innerText = text.length; document.getElementById('word-count').innerText = text.trim() === '' ? 0 : text.trim().split(/\s+/).length; }
         function formatText(type) { const el = document.getElementById('tool-text'); if(type === 'UPPER') el.value = el.value.toUpperCase(); if(type === 'LOWER') el.value = el.value.toLowerCase(); if(type === 'TITLE') el.value = el.value.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase()); updateTextTools(); }
-        function copyToolText() { const val = document.getElementById('tool-text').value; if(val.trim() !== '') copy(val); }
+        function copyToolText() { const val = document.getElementById('tool-text').value; if(val.trim() !== '') copy(val, {etiqueta: 'Texto formateado', origen: 'herramienta'}); }
 
         // --- 7. MODALES, FORMS Y CRUD LOCAL ---
         function openModal(id) { const m = document.getElementById(id); m.classList.remove('hidden'); m.style.display = 'flex'; setTimeout(() => m.classList.add('show'), 10); }
         function closeModal(id) { const m = document.getElementById(id); m.classList.remove('show'); setTimeout(() => { m.style.display = 'none'; m.classList.add('hidden'); }, 300); }
 
         function openPreview(title, viewText, copyText) {
-            document.getElementById('preview-title').innerText = title; document.getElementById('preview-content').innerText = viewText; textToCopyFromPreview = copyText;
+            document.getElementById('preview-title').innerText = title; document.getElementById('preview-content').innerText = viewText; textToCopyFromPreview = copyText; previewTitleActual = title;
             document.getElementById('btn-copy-preview').style.display = copyText ? 'block' : 'none'; openModal('preview-modal');
         }
-        function copyFromPreview() { if(textToCopyFromPreview) copy(textToCopyFromPreview); closeModal('preview-modal'); }
+        function copyFromPreview() { if(textToCopyFromPreview) copy(textToCopyFromPreview, {etiqueta: previewTitleActual || 'Vista previa', origen: 'preview'}); closeModal('preview-modal'); }
 
         function openForm(title, fields, onSubmit) {
             document.getElementById('form-title').innerText = title; const container = document.getElementById('form-inputs'); container.innerHTML = '';
@@ -848,8 +848,10 @@
         function delNews(idx) { db.news.splice(idx,1); markUnsaved(); }
 
         // UTILS
-        async function copy(x) { 
+        async function copy(x, meta) { 
             showToastMsg("Copiado al portapapeles ✅");
+            // Alimenta el panel de copias recientes (recientes.js)
+            try { if (typeof registrarCopia === 'function') registrarCopia(x, meta); } catch(e) {}
             try { await navigator.clipboard.writeText(x); } 
             catch { const t=document.createElement('textarea'); t.value=x; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); } 
         }
