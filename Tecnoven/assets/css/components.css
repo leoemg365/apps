@@ -366,7 +366,7 @@ input[readonly] {
   font-size: 12px;
 }
 
-.chip.new { background-color: #1a73e8; }
+.chip.new { background-color: var(--vino); }
 .chip.improved { background-color: #1e8e3e; }
 .chip.fixed { background-color: #d93025; }
 
