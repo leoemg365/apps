@@ -133,6 +133,11 @@
   display: block;
 }
 
+/* Secciones que necesitan más ancho (inventario) */
+.content-section.wide {
+  max-width: 1080px;
+}
+
 h2 {
   margin: 0 0 18px;
   color: var(--vino);

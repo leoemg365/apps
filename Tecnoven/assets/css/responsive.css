@@ -37,6 +37,12 @@
   }
 }
 
+@media (max-width: 900px) {
+  .split-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 767px) {
   .counter-grid {
     grid-template-columns: 1fr;

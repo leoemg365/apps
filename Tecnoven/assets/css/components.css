@@ -391,3 +391,160 @@ input[readonly] {
 .message-box.show {
   opacity: 1;
 }
+
+/* ==========================================================================
+   Inventario — paneles, tablas, historial y zona de peligro
+   ========================================================================== */
+
+.split-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.panel {
+  padding: 14px;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  background: #fbfafb;
+}
+
+.panel h3 {
+  margin: 0 0 10px;
+  color: var(--vino);
+  font-size: 1.05rem;
+}
+
+.table-wrap {
+  max-height: 30rem;
+  overflow: auto;
+  border: 1px solid #eee;
+  border-radius: 12px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 12px;
+  border: 0;
+  background: var(--vino);
+  color: #fff;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.data-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
+}
+
+.data-table tbody tr:hover {
+  background: #f8eef1;
+}
+
+.data-table th:last-child,
+.data-table td:last-child {
+  text-align: right;
+}
+
+.table-empty {
+  padding: 18px;
+  color: #777;
+  text-align: center;
+}
+
+.link-danger {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #c62828;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.link-danger:hover {
+  color: #8e1b1b;
+  text-decoration: underline;
+}
+
+.report-card {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.report-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.report-card h4 {
+  margin: 0;
+  color: var(--vino);
+  font-size: 1rem;
+}
+
+.report-card .meta {
+  margin: 2px 0 10px;
+  color: #777;
+  font-size: 0.85rem;
+}
+
+.danger-zone {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #e0b4b4;
+  border-radius: 12px;
+  background: #fdf4f4;
+}
+
+.danger-zone h3 {
+  margin: 0;
+  color: #b3261e;
+  font-size: 1rem;
+}
+
+.danger-zone p {
+  margin: 8px 0 12px;
+  color: #555;
+  font-size: 0.9rem;
+}
+
+.btn.danger {
+  background: #b3261e;
+}
+
+.btn.danger:hover {
+  background: #8e1b1b;
+}
+
+.feedback {
+  min-height: 1.2em;
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+}
+
+.feedback.ok {
+  color: #1e8e3e;
+}
+
+.feedback.error {
+  color: #b3261e;
+}

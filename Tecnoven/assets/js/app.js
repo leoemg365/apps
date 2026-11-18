@@ -16,8 +16,11 @@
     Tecnoven.forms.activacion.init();
     Tecnoven.forms.solicitud.init();
 
-    // Estado inicial: ficha de trabajo con fecha y hora de hoy.
-    Tecnoven.ui.showSection('ficha-instalacion');
+    // Estado inicial: la sección pedida en la URL (#proceso-activacion) o la ficha.
+    const requested = (global.location.hash || '').replace('#', '');
+    const initialSection = document.getElementById(requested) ? requested : 'ficha-instalacion';
+    Tecnoven.ui.showSection(initialSection);
+
     setFechaHoy('fecha');
     setHoraAhora('horaInicio');
 
