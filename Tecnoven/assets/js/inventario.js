@@ -1,5 +1,5 @@
 /**
- * Inventario: importación de reportes, stock por cliente, historial y borrado.
+ * Interfaz de Inventario y Reportes guardados (solo lectura sobre el almacén).
  */
 (function (global) {
   'use strict';
@@ -7,33 +7,19 @@
   const Tecnoven = global.Tecnoven;
   const { $ } = Tecnoven.utils;
 
-  const INVENTORY_KEY = 'inventoryAppItems_v2';
-  const HISTORY_KEY = 'inventoryAppHistory_v2';
+  const TIPOS = {
+    instalacion: 'Instalación',
+    soporte: 'Soporte',
+    activacion: 'Activación',
+    solicitud: 'Solicitud',
+    importado: 'Importado'
+  };
 
-  const MATERIAL_FIELDS = [
-    'CONECTOR APC',
-    'CONECTOR UPC',
-    'CONECTOR RG6',
-    'CONECTOR RJ45',
-    'SPLITTER TV',
-    'ROSETA',
-    'MANGUITA',
-    'COUPLE',
-    'METRAJE UTP',
-    'METRAJE DROP',
-    'METRAJE COAXIAL',
-    'METRAJE FLAP',
-    'MASTIL',
-    'TENSORES',
-    'PREFORMADOS',
-    'GRAPAS y CLAVOS',
-    'Ramplug y Tornillos'
-  ];
+  const UNIDADES = {
+    u: 'u',
+    m: 'm'
+  };
 
-  let inventory = [];
-  let history = [];
-
-  /** Crea un elemento con clase, texto y atributos. */
   function el(tag, options) {
     const node = document.createElement(tag);
     const opts = options || {};
@@ -47,311 +33,318 @@
     return node;
   }
 
-  /** Identificador único del item o del reporte. */
-  function uid() {
-    if (global.crypto && typeof global.crypto.randomUUID === 'function') {
-      return global.crypto.randomUUID();
-    }
-    return 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+  function etiquetaTipo(tipo) {
+    return TIPOS[tipo] || tipo || 'Reporte';
   }
 
-  function load() {
-    try {
-      inventory = JSON.parse(localStorage.getItem(INVENTORY_KEY)) || [];
-    } catch (error) {
-      inventory = [];
-    }
+  /* ------------------------------- Inventario ------------------------------- */
 
-    try {
-      history = JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
-    } catch (error) {
-      history = [];
-    }
+  function rellenarClientes(select) {
+    if (!select) return;
+
+    const actual = select.value;
+    const clientes = Array.from(
+      new Set(Tecnoven.reportes.listar().map((reporte) => reporte.cliente).filter(Boolean))
+    ).sort((a, b) => a.localeCompare(b, 'es'));
+
+    select.textContent = '';
+    select.appendChild(el('option', { text: 'Todos los clientes', attrs: { value: '' } }));
+    clientes.forEach((cliente) => {
+      select.appendChild(el('option', { text: cliente, attrs: { value: cliente } }));
+    });
+
+    select.value = clientes.includes(actual) ? actual : '';
   }
 
-  function save() {
-    localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  }
-
-  /**
-   * Extrae fecha, cliente y materiales del texto del reporte.
-   * Formato esperado, una línea por campo: "CLAVE: valor".
-   */
-  function parseReportText(text) {
-    const data = { items: [] };
-
-    String(text)
-      .split(/\r?\n/)
-      .forEach((line) => {
-        const index = line.indexOf(':');
-        if (index === -1) return;
-
-        const rawKey = line.slice(0, index).trim();
-        const key = rawKey.toUpperCase();
-        const value = line.slice(index + 1).trim();
-
-        if (key === 'FECHA') {
-          data.entryDate = value;
-        } else if (key === 'NOMBRE DE CLIENTE') {
-          data.clientName = value;
-        } else if (
-          value &&
-          value.toLowerCase() !== 'n/a' &&
-          MATERIAL_FIELDS.some((field) => field.toUpperCase() === key)
-        ) {
-          data.items.push({ name: rawKey, value });
-        }
-      });
-
-    return data;
-  }
-
-  function renderInventory() {
+  function renderInventario() {
     const body = $('inventarioCuerpo');
     if (!body) return;
 
+    const filtro = $('filtroClienteInv');
+    const filas = Tecnoven.reportes.agregarInventario(filtro ? filtro.value : '');
+
     body.textContent = '';
 
-    if (!inventory.length) {
+    if (!filas.length) {
       const row = el('tr');
-      const cell = el('td', { className: 'table-empty', text: 'No hay items en el inventario.' });
+      const cell = el('td', { className: 'table-empty', text: 'Todavía no hay materiales: guarda un reporte de la ficha de trabajo.' });
       cell.colSpan = 4;
       row.appendChild(cell);
       body.appendChild(row);
       return;
     }
 
-    inventory
-      .slice()
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .forEach((item) => {
-        const row = el('tr');
-        row.appendChild(el('td', { text: item.itemName }));
-        row.appendChild(el('td', { text: item.itemValue }));
-        row.appendChild(el('td', { text: item.clientName }));
+    filas.forEach((fila) => {
+      const row = el('tr');
+      row.appendChild(el('td', { text: fila.clave }));
+      row.appendChild(el('td', { text: String(fila.total) }));
+      row.appendChild(el('td', { text: UNIDADES[fila.unidad] || fila.unidad || '' }));
 
-        const actions = el('td');
-        const button = el('button', { className: 'link-danger', text: 'Eliminar' });
-        button.type = 'button';
-        button.dataset.id = item.id;
-        button.setAttribute('aria-label', 'Eliminar ' + item.itemName + ' de ' + item.clientName);
-        actions.appendChild(button);
-        row.appendChild(actions);
+      const clientes = el('td', { className: 'col-left' });
+      const detalles = el('details');
+      const resumen = el('summary', { text: fila.clientes.length + ' cliente(s)' });
+      detalles.appendChild(resumen);
 
-        body.appendChild(row);
+      const lista = el('ul');
+      fila.clientes.forEach((cliente) => {
+        lista.appendChild(el('li', { text: cliente.cliente + ': ' + cliente.total + ' ' + (UNIDADES[fila.unidad] || '') }));
       });
+
+      detalles.appendChild(lista);
+      clientes.appendChild(detalles);
+      row.appendChild(clientes);
+
+      body.appendChild(row);
+    });
   }
 
-  function renderHistory() {
-    const list = $('historialLista');
+  /* -------------------------------- Reportes -------------------------------- */
+
+  function coincide(reporte, busqueda) {
+    if (!busqueda) return true;
+
+    const texto = busqueda.toLowerCase();
+    const campos = [reporte.cliente, reporte.fecha, reporte.texto, etiquetaTipo(reporte.tipo)];
+
+    if (campos.some((campo) => String(campo || '').toLowerCase().includes(texto))) return true;
+
+    return (reporte.materiales || []).some((material) => material.clave.toLowerCase().includes(texto));
+  }
+
+  function tarjetaReporte(reporte) {
+    const card = el('article', { className: 'report-card' });
+    card.dataset.id = reporte.id;
+
+    const header = el('header');
+    const info = el('div');
+
+    const titulo = el('h4', { text: reporte.cliente });
+    info.appendChild(titulo);
+
+    const meta = el('p', { className: 'meta' });
+    meta.appendChild(el('span', { className: 'tag', text: etiquetaTipo(reporte.tipo) }));
+    meta.appendChild(document.createTextNode(
+      ' ' + (reporte.fecha || 'sin fecha') + ' · ' + (reporte.materiales || []).length + ' material(es)'
+    ));
+    info.appendChild(meta);
+    header.appendChild(info);
+
+    const acciones = el('div', { className: 'actions' });
+
+    const ver = el('button', { className: 'btn alt', text: 'Ver' });
+    ver.type = 'button';
+    ver.dataset.accion = 'ver';
+
+    const copiar = el('button', { className: 'btn alt', text: 'Copiar' });
+    copiar.type = 'button';
+    copiar.dataset.accion = 'copiar';
+
+    const eliminar = el('button', { className: 'link-danger', text: 'Eliminar' });
+    eliminar.type = 'button';
+    eliminar.dataset.accion = 'eliminar';
+
+    acciones.appendChild(ver);
+    acciones.appendChild(copiar);
+    acciones.appendChild(eliminar);
+    header.appendChild(acciones);
+
+    card.appendChild(header);
+
+    const texto = el('pre', { className: 'texto', text: reporte.texto });
+    texto.hidden = true;
+    card.appendChild(texto);
+
+    return card;
+  }
+
+  function renderReportes() {
+    const list = $('reportesLista');
     if (!list) return;
+
+    const tipoFiltro = $('filtroTipoRep');
+    const buscador = $('buscarRep');
+    const tipo = tipoFiltro ? tipoFiltro.value : '';
+    const busqueda = buscador ? buscador.value.trim() : '';
+
+    const reportes = Tecnoven.reportes
+      .listar()
+      .filter((reporte) => (!tipo || reporte.tipo === tipo) && coincide(reporte, busqueda));
 
     list.textContent = '';
 
-    if (!history.length) {
-      list.appendChild(el('p', { className: 'table-empty', text: 'No hay reportes en el historial.' }));
-      return;
-    }
-
-    history
-      .slice()
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .forEach((report) => {
-        const card = el('article', { className: 'report-card' });
-
-        const header = el('header');
-        const info = el('div');
-        info.appendChild(el('h4', { text: report.clientName }));
-        info.appendChild(el('p', { className: 'meta', text: 'Fecha: ' + report.entryDate }));
-        header.appendChild(info);
-
-        const remove = el('button', { className: 'link-danger', text: 'Eliminar' });
-        remove.type = 'button';
-        remove.dataset.reportId = report.reportId;
-        remove.setAttribute('aria-label', 'Eliminar el reporte de ' + report.clientName);
-        header.appendChild(remove);
-        card.appendChild(header);
-
-        const wrap = el('div', { className: 'table-wrap' });
-        const table = el('table', { className: 'data-table' });
-
-        const head = el('thead');
-        const headRow = el('tr');
-        headRow.appendChild(el('th', { text: 'Item' }));
-        headRow.appendChild(el('th', { text: 'Cantidad' }));
-        head.appendChild(headRow);
-        table.appendChild(head);
-
-        const body = el('tbody');
-        (report.items || []).forEach((item) => {
-          const row = el('tr');
-          row.appendChild(el('td', { text: item.name }));
-          row.appendChild(el('td', { text: item.value }));
-          body.appendChild(row);
-        });
-        table.appendChild(body);
-
-        wrap.appendChild(table);
-        card.appendChild(wrap);
-        list.appendChild(card);
-      });
-  }
-
-  function setFeedback(message, isError) {
-    const feedback = $('feedbackProceso');
-    if (!feedback) return;
-
-    feedback.className = 'feedback ' + (isError ? 'error' : 'ok');
-    feedback.textContent = message;
-  }
-
-  function handleProcess() {
-    const input = $('reporteInput');
-    if (!input) return;
-
-    const text = input.value.trim();
-
-    if (!text) {
-      setFeedback('Pega primero el reporte de trabajo.', true);
-      return;
-    }
-
-    try {
-      const parsed = parseReportText(text);
-
-      if (!parsed.entryDate) throw new Error("falta la línea 'FECHA'.");
-      if (!parsed.clientName) throw new Error("falta la línea 'NOMBRE DE CLIENTE'.");
-      if (!parsed.items.length) throw new Error('no se encontraron materiales válidos.');
-
-      const reportId = uid();
-      const createdAt = Date.now();
-
-      history.push({
-        reportId,
-        clientName: parsed.clientName,
-        entryDate: parsed.entryDate,
-        items: parsed.items,
-        createdAt
-      });
-
-      parsed.items.forEach((item) => {
-        inventory.push({
-          id: uid(),
-          reportId,
-          itemName: item.name,
-          itemValue: item.value,
-          clientName: parsed.clientName,
-          entryDate: parsed.entryDate,
-          createdAt
-        });
-      });
-
-      save();
-      renderInventory();
-      renderHistory();
-
-      setFeedback('Reporte agregado: ' + parsed.items.length + ' item(s).', false);
-      input.value = '';
-      Tecnoven.ui.showMessage('Reporte añadido al inventario');
-    } catch (error) {
-      setFeedback('Error: ' + error.message, true);
-    }
-  }
-
-  function handleInventoryClick(event) {
-    const button = event.target.closest('button[data-id]');
-    if (!button) return;
-
-    const item = inventory.find((entry) => entry.id === button.dataset.id);
-    if (!item) return;
-
-    if (!global.confirm('¿Eliminar "' + item.itemName + '"? Esta acción no se puede deshacer.')) {
-      return;
-    }
-
-    inventory = inventory.filter((entry) => entry.id !== item.id);
-
-    const report = history.find((entry) => entry.reportId === item.reportId);
-    if (report) {
-      report.items = report.items.filter(
-        (entry) => !(entry.name === item.itemName && entry.value === item.itemValue)
+    if (!reportes.length) {
+      list.appendChild(
+        el('p', {
+          className: 'table-empty',
+          text: 'No hay reportes guardados con ese filtro. Genera uno y pulsa «Guardar».'
+        })
       );
-      if (!report.items.length) {
-        history = history.filter((entry) => entry.reportId !== report.reportId);
+      return;
+    }
+
+    reportes.forEach((reporte) => list.appendChild(tarjetaReporte(reporte)));
+  }
+
+  /** Vuelve a pintar ambas vistas (lo llaman los formularios al guardar). */
+  function refrescar() {
+    if ($('inventarioCuerpo')) {
+      rellenarClientes($('filtroClienteInv'));
+      renderInventario();
+    }
+
+    if ($('reportesLista')) renderReportes();
+  }
+
+  /* --------------------------------- Acciones ------------------------------- */
+
+  function descargar(nombre, contenido, tipoMime) {
+    const blob = new Blob([contenido], { type: tipoMime });
+    const url = URL.createObjectURL(blob);
+    const enlace = document.createElement('a');
+
+    enlace.href = url;
+    enlace.download = nombre;
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function marcaDeTiempo() {
+    const hoy = new Date();
+    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+    const dia = String(hoy.getDate()).padStart(2, '0');
+    return hoy.getFullYear() + mes + dia;
+  }
+
+  function descargarJSON() {
+    descargar('inventario-' + marcaDeTiempo() + '.json', Tecnoven.reportes.exportarJSON(), 'application/json');
+    Tecnoven.ui.showMessage('Respaldo JSON descargado');
+  }
+
+  function descargarCSV() {
+    const filtro = $('filtroClienteInv');
+    const cliente = filtro ? filtro.value : '';
+    descargar('inventario-' + marcaDeTiempo() + '.csv', Tecnoven.reportes.exportarCSV(cliente), 'text/csv;charset=utf-8');
+    Tecnoven.ui.showMessage('CSV descargado');
+  }
+
+  function importarPegado() {
+    const input = $('reportePegado');
+    const feedback = $('feedbackImportar');
+    if (!input || !feedback) return;
+
+    const texto = input.value.trim();
+
+    if (!texto) {
+      feedback.className = 'feedback error';
+      feedback.textContent = 'Pega primero el texto del reporte.';
+      return;
+    }
+
+    const datos = Tecnoven.reportes.parsearTexto(texto);
+
+    const resultado = Tecnoven.reportes.guardar({
+      tipo: 'importado',
+      origen: 'importado',
+      cliente: datos.cliente,
+      fecha: datos.fecha,
+      nap: datos.nap,
+      texto,
+      materiales: datos.materiales
+    });
+
+    if (!resultado.ok) {
+      feedback.className = 'feedback error';
+      feedback.textContent =
+        resultado.motivo === 'duplicado'
+          ? 'Ese reporte ya está guardado.'
+          : 'El reporte está vacío.';
+      return;
+    }
+
+    feedback.className = 'feedback ok';
+    feedback.textContent =
+      'Reporte importado: ' + datos.materiales.length + ' material(es).';
+    input.value = '';
+    refrescar();
+    Tecnoven.ui.showMessage('Reporte importado');
+  }
+
+  function manejarClickReportes(event) {
+    const boton = event.target.closest('button[data-accion]');
+    if (!boton) return;
+
+    const tarjeta = boton.closest('.report-card');
+    if (!tarjeta) return;
+
+    const id = tarjeta.dataset.id;
+    const reporte = Tecnoven.reportes.obtener(id);
+    if (!reporte) return;
+
+    const accion = boton.dataset.accion;
+
+    if (accion === 'ver') {
+      const texto = tarjeta.querySelector('.texto');
+      if (!texto) return;
+
+      texto.hidden = !texto.hidden;
+      boton.textContent = texto.hidden ? 'Ver' : 'Ocultar';
+      return;
+    }
+
+    if (accion === 'copiar') {
+      Tecnoven.utils.copyText(reporte.texto).then(() => Tecnoven.ui.showMessage('Copiado ✅'));
+      return;
+    }
+
+    if (accion === 'eliminar') {
+      if (!global.confirm('¿Eliminar el reporte de ' + reporte.cliente + '? También se quitarán sus materiales del inventario.')) {
+        return;
       }
-    }
 
-    save();
-    renderInventory();
-    renderHistory();
-    Tecnoven.ui.showMessage('Item eliminado');
+      Tecnoven.reportes.eliminar(id);
+      refrescar();
+      Tecnoven.ui.showMessage('Reporte eliminado');
+    }
   }
 
-  function handleHistoryClick(event) {
-    const button = event.target.closest('button[data-report-id]');
-    if (!button) return;
-
-    if (!global.confirm('¿Eliminar este reporte completo del historial y del inventario?')) {
-      return;
-    }
-
-    const reportId = button.dataset.reportId;
-
-    history = history.filter((entry) => entry.reportId !== reportId);
-    inventory = inventory.filter((entry) => entry.reportId !== reportId);
-
-    save();
-    renderInventory();
-    renderHistory();
-    Tecnoven.ui.showMessage('Reporte eliminado');
-  }
-
-  function handleDeleteAll() {
-    if (
-      !global.confirm(
-        '¿ESTÁS SEGURO? Se borrará TODO el inventario y TODO el historial de forma permanente.'
-      )
-    ) {
-      return;
-    }
-
-    inventory = [];
-    history = [];
-
-    save();
-    renderInventory();
-    renderHistory();
-    setFeedback('', false);
-    Tecnoven.ui.showMessage('Datos eliminados');
-  }
+  /* --------------------------------- Arranque ------------------------------- */
 
   function init() {
-    load();
-    renderInventory();
-    renderHistory();
+    Tecnoven.reportes.migrar();
 
-    Tecnoven.ui.initNavigation();
-    Tecnoven.ui.initTheme();
-    Tecnoven.ui.showSection('inventario-section');
+    rellenarClientes($('filtroClienteInv'));
+    renderInventario();
+    renderReportes();
 
-    const processBtn = $('btnProcesar');
-    if (processBtn) processBtn.addEventListener('click', handleProcess);
+    const filtroCliente = $('filtroClienteInv');
+    if (filtroCliente) filtroCliente.addEventListener('change', renderInventario);
 
-    const inventoryBody = $('inventarioCuerpo');
-    if (inventoryBody) inventoryBody.addEventListener('click', handleInventoryClick);
+    const filtroTipo = $('filtroTipoRep');
+    if (filtroTipo) filtroTipo.addEventListener('change', renderReportes);
 
-    const historyList = $('historialLista');
-    if (historyList) historyList.addEventListener('click', handleHistoryClick);
+    const buscador = $('buscarRep');
+    if (buscador) buscador.addEventListener('input', renderReportes);
 
-    const clearBtn = $('btnBorrarTodo');
-    if (clearBtn) clearBtn.addEventListener('click', handleDeleteAll);
+    const btnImportar = $('btnImportarTexto');
+    if (btnImportar) btnImportar.addEventListener('click', importarPegado);
+
+    const btnJSON = $('btnExportarJSON');
+    if (btnJSON) btnJSON.addEventListener('click', descargarJSON);
+
+    const btnCSV = $('btnExportarCSV');
+    if (btnCSV) btnCSV.addEventListener('click', descargarCSV);
+
+    const lista = $('reportesLista');
+    if (lista) lista.addEventListener('click', manejarClickReportes);
   }
 
   Tecnoven.inventario = {
-    parseReportText,
-    init
+    init,
+    refrescar,
+    renderInventario,
+    renderReportes
   };
-
-  document.addEventListener('DOMContentLoaded', init);
 })(window);

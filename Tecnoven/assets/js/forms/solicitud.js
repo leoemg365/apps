@@ -8,6 +8,9 @@
   const { $, toNA, copyText } = Tecnoven.utils;
   const { showMessage } = Tecnoven.ui;
 
+  /** Copia exacta del último reporte generado, para el botón Guardar. */
+  let ultimoGenerado = null;
+
   function generarReporte() {
     const servicio = $('servicioSol').value;
     const napRegion = $('napRegionSol').value;
@@ -23,6 +26,33 @@
     ];
 
     $('resultadoSol').textContent = lineas.join('\n');
+
+    ultimoGenerado = {
+      tipo: 'solicitud',
+      cliente: toNA(cliente),
+      fecha: '',
+      nap,
+      texto: $('resultadoSol').textContent,
+      materiales: []
+    };
+  }
+
+  function guardarReporte() {
+    if (!ultimoGenerado) {
+      showMessage('Genera el reporte primero.');
+      return;
+    }
+
+    const resultado = Tecnoven.reportes.guardar(ultimoGenerado);
+
+    if (resultado.ok) {
+      Tecnoven.inventario.refrescar();
+      showMessage('Reporte guardado ✅');
+    } else if (resultado.motivo === 'duplicado') {
+      showMessage('Este reporte ya está guardado');
+    } else {
+      showMessage('El reporte está vacío');
+    }
   }
 
   async function copiarReporte() {
@@ -44,12 +74,14 @@
         if (el.type !== 'button') el.value = '';
       });
 
+    ultimoGenerado = null;
     $('resultadoSol').textContent = '';
   }
 
   function init() {
     $('btnGenerarSol').addEventListener('click', generarReporte);
     $('btnCopiarSol').addEventListener('click', copiarReporte);
+    $('btnGuardarSol').addEventListener('click', guardarReporte);
     $('btnNuevoSol').addEventListener('click', nuevoFormato);
   }
 

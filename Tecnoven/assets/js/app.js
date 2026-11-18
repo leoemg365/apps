@@ -16,6 +16,8 @@
     Tecnoven.forms.activacion.init();
     Tecnoven.forms.solicitud.init();
 
+    Tecnoven.inventario.init();
+
     // Estado inicial: la sección pedida en la URL (#proceso-activacion) o la ficha.
     const requested = (global.location.hash || '').replace('#', '');
     const initialSection = document.getElementById(requested) ? requested : 'ficha-instalacion';

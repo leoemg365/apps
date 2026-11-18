@@ -22,6 +22,8 @@
   <script src="assets/js/config.js" defer></script>
   <script src="assets/js/utils.js" defer></script>
   <script src="assets/js/ui.js" defer></script>
+  <script src="assets/js/reportes.js" defer></script>
+  <script src="assets/js/inventario.js" defer></script>
   <script src="assets/js/qr.js" defer></script>
   <script src="assets/js/forms/ficha-instalacion.js" defer></script>
   <script src="assets/js/forms/activacion.js" defer></script>
@@ -31,13 +33,14 @@
 <body>
 
   <!-- Menú lateral -->
-  <nav class="nav-menu" aria-label="Formatos disponibles">
-    <h3>Formatos</h3>
+  <nav class="nav-menu" aria-label="Secciones de la aplicación">
+    <h3>Secciones</h3>
     <ul>
       <li><a href="#" class="nav-link" data-target="ficha-instalacion">Ficha de Trabajo</a></li>
       <li><a href="#" class="nav-link" data-target="proceso-activacion">Proceso de Activación</a></li>
       <li><a href="#" class="nav-link" data-target="solicitud">Solicitud</a></li>
-      <li><a href="inventario.html">Inventario</a></li>
+      <li><a href="#" class="nav-link" data-target="inventario">Inventario</a></li>
+      <li><a href="#" class="nav-link" data-target="reportes">Reportes</a></li>
     </ul>
     <button class="btn alt" id="toggleThemeBtn" type="button" title="Modo claro/oscuro" aria-label="Cambiar tema">🌙</button>
   </nav>
@@ -322,6 +325,7 @@
       <div class="actions">
         <button class="btn" id="btnGenerarInst" type="button">Generar</button>
         <button class="btn" id="btnCopiarInst" type="button">Copiar</button>
+        <button class="btn alt" id="btnGuardarInst" type="button">Guardar</button>
         <button class="btn alt" id="btnNuevoInst" type="button">Nuevo Formato</button>
       </div>
       <div class="output" id="resultadoInst" aria-live="polite"></div>
@@ -382,6 +386,7 @@
       <div class="actions">
         <button class="btn" id="btnGenerarAct" type="button">Generar</button>
         <button class="btn" id="btnCopiarAct" type="button">Copiar</button>
+        <button class="btn alt" id="btnGuardarAct" type="button">Guardar</button>
         <button class="btn alt" id="btnNuevoAct" type="button">Nuevo Formato</button>
       </div>
       <div class="output" id="resultadoAct" aria-live="polite"></div>
@@ -415,14 +420,79 @@
       <div class="actions">
         <button class="btn" id="btnGenerarSol" type="button">Generar</button>
         <button class="btn" id="btnCopiarSol" type="button">Copiar</button>
+        <button class="btn alt" id="btnGuardarSol" type="button">Guardar</button>
         <button class="btn alt" id="btnNuevoSol" type="button">Nuevo Formato</button>
       </div>
       <div class="output" id="resultadoSol" aria-live="polite"></div>
     </section>
 
+    <!-- Inventario -->
+    <section id="inventario" class="content-section wide" aria-labelledby="tituloInventario">
+      <h2 id="tituloInventario">Inventario</h2>
+
+      <div class="toolbar">
+        <label class="field-inline" for="filtroClienteInv">Cliente
+          <select id="filtroClienteInv">
+            <option value="">Todos los clientes</option>
+          </select>
+        </label>
+        <div class="actions toolbar-actions">
+          <button class="btn" id="btnExportarJSON" type="button">Exportar JSON</button>
+          <button class="btn alt" id="btnExportarCSV" type="button">Exportar CSV</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Item</th>
+              <th scope="col">Cantidad</th>
+              <th scope="col">Unidad</th>
+              <th scope="col">Clientes</th>
+            </tr>
+          </thead>
+          <tbody id="inventarioCuerpo"></tbody>
+        </table>
+      </div>
+
+      <p class="hint">El inventario se calcula con los reportes guardados: si borras un reporte, sus materiales desaparecen de aquí.</p>
+
+      <div class="panel">
+        <h3>Importar reporte pegado</h3>
+        <label for="reportePegado">Texto del reporte</label>
+        <textarea id="reportePegado" placeholder="FECHA: 12/11/2025&#10;NOMBRE DE CLIENTE: ...&#10;CONECTOR APC: 2"></textarea>
+        <button class="btn alt" id="btnImportarTexto" type="button">Importar reporte</button>
+        <p class="feedback" id="feedbackImportar" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <!-- Reportes guardados -->
+    <section id="reportes" class="content-section wide" aria-labelledby="tituloReportes">
+      <h2 id="tituloReportes">Reportes guardados</h2>
+
+      <div class="toolbar">
+        <label class="field-inline" for="filtroTipoRep">Tipo
+          <select id="filtroTipoRep">
+            <option value="">Todos</option>
+            <option value="instalacion">Instalación</option>
+            <option value="soporte">Soporte</option>
+            <option value="activacion">Activación</option>
+            <option value="solicitud">Solicitud</option>
+            <option value="importado">Importado</option>
+          </select>
+        </label>
+        <label class="field-inline" for="buscarRep">Buscar
+          <input id="buscarRep" type="search" placeholder="Cliente, fecha o material">
+        </label>
+      </div>
+
+      <div id="reportesLista"></div>
+    </section>
+
     <footer class="app-footer">
       Plataforma de Reportes y Formatos<br>
-      Versión 2.1<br>
+      Versión 2.2<br>
       Todos los derechos reservados<br>
       © 2025 Espiral - Leonardo Montiel<br>
       <a href="https://wa.me/584121982608">Contáctanos</a>

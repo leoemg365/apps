@@ -15,30 +15,15 @@
     copyText
   } = Tecnoven.utils;
   const { showMessage } = Tecnoven.ui;
+  const { MATERIALES } = Tecnoven.config;
 
   const METRAJE_MANUAL_FIELDS = ['utpManual', 'dropManual', 'coaxialManual', 'flapManual'];
   const METRAJE_TYPES = ['utp', 'drop', 'coaxial', 'flap'];
-  const COUNTER_FIELDS = [
-    'apc',
-    'upc',
-    'rg6',
-    'rj45',
-    'splitter',
-    'roseta',
-    'manguita',
-    'couple',
-    'utp',
-    'drop',
-    'coaxial',
-    'flap',
-    'mastil',
-    'tensores',
-    'preformados',
-    'grapas',
-    'ramplug'
-  ];
+  const COUNTER_FIELDS = MATERIALES.map((material) => material.campo);
 
   let tecnicosSeleccionados = [];
+  /** Copia exacta del último reporte generado, para el botón Guardar. */
+  let ultimoGenerado = null;
 
   function renderChips() {
     const container = $('chipsContainer');
@@ -145,31 +130,50 @@
       `SERIAL: ${toNA($('serialInst').value)}`,
       `NAP: ${toNA(nap)}`,
       `PUERTO: ${toNA($('puertoInst').value)}`,
-      `POTENCIA: ${toNA($('potencia').value)}`,
-      `CONECTOR APC: ${toNA(contadores.apc)}`,
-      `CONECTOR UPC: ${toNA(contadores.upc)}`,
-      `CONECTOR RG6: ${toNA(contadores.rg6)}`,
-      `CONECTOR RJ45: ${toNA(contadores.rj45)}`,
-      `SPLITTER TV: ${toNA(contadores.splitter)}`,
-      `ROSETA: ${toNA(contadores.roseta)}`,
-      `MANGUITA: ${toNA(contadores.manguita)}`,
-      `COUPLE: ${toNA(contadores.couple)}`,
-      `METRAJE UTP: ${toNA(contadores.utp)}`,
-      `METRAJE DROP: ${toNA(contadores.drop)}`,
-      `METRAJE COAXIAL: ${toNA(contadores.coaxial)}`,
-      `METRAJE FLAP: ${toNA(contadores.flap)}`,
-      `MASTIL: ${toNA(contadores.mastil)}`,
-      `TENSORES: ${toNA(contadores.tensores)}`,
-      `PREFORMADOS: ${toNA(contadores.preformados)}`,
-      `GRAPAS y CLAVOS: ${toNA(contadores.grapas)}`,
-      `Ramplug y Tornillos: ${toNA(contadores.ramplug)}`,
+      `POTENCIA: ${toNA($('potencia').value)}`
+    ];
+
+    MATERIALES.forEach((material) => {
+      lineas.push(`${material.etiqueta}: ${toNA(contadores[material.campo])}`);
+    });
+
+    lineas.push(
       `UBICACIÓN: ${toNA($('ubicacion').value)}`,
       `TÉCNICOS: ${tecnicos}`,
       `Cobrar: ${toNA($('cobro').value)}`,
       `Observación:\n${observacionFinal}`
-    ];
+    );
 
     $('resultadoInst').textContent = lineas.join('\n');
+
+    // El reporte se guarda por copia: si luego se editan los campos, el botón
+    // Guardar sigue archivando exactamente lo que se generó.
+    ultimoGenerado = {
+      tipo,
+      cliente: toNA($('cliente').value),
+      fecha: formatFecha($('fecha').value),
+      nap,
+      texto: $('resultadoInst').textContent,
+      materiales: Tecnoven.reportes.materialesDe(contadores)
+    };
+  }
+
+  function guardarReporte() {
+    if (!ultimoGenerado) {
+      showMessage('Genera el reporte primero');
+      return;
+    }
+
+    const resultado = Tecnoven.reportes.guardar(ultimoGenerado);
+
+    if (resultado.ok) {
+      Tecnoven.inventario.refrescar();
+      showMessage('Reporte guardado ✅');
+    } else if (resultado.motivo === 'duplicado') {
+      showMessage('Este reporte ya está guardado');
+    } else {
+      showMessage('El reporte está vacío');
+    }
   }
 
   async function copiarReporte() {
@@ -193,6 +197,7 @@
 
     tecnicosSeleccionados = [];
     renderChips();
+    ultimoGenerado = null;
     $('resultadoInst').textContent = '';
 
     const btnUbicacion = $('btnUbicacion');
@@ -286,6 +291,7 @@
 
     $('btnGenerarInst').addEventListener('click', generarReporte);
     $('btnCopiarInst').addEventListener('click', copiarReporte);
+    $('btnGuardarInst').addEventListener('click', guardarReporte);
     $('btnNuevoInst').addEventListener('click', nuevoFormato);
     $('btnUbicacion').addEventListener('click', obtenerUbicacion);
 

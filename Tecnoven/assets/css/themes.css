@@ -158,3 +158,20 @@ body.dark-mode .feedback.ok {
 body.dark-mode .feedback.error {
   color: #f08a80;
 }
+
+body.dark-mode .tag {
+  background: var(--vino-2);
+}
+
+body.dark-mode .data-table details summary {
+  color: #f0b9c9;
+}
+
+body.dark-mode .report-card .actions .btn.alt {
+  background: #232323;
+}
+
+body.dark-mode .report-card .texto {
+  background: #181818;
+  color: #eee;
+}
