@@ -29,6 +29,37 @@
         let currentRepMode = 1; let r4Status = 'PRESENTADA'; let finalReportAsterisks = "";
         let r5Nodes = []; let r5Status = 'ACTIVO'; 
 
+        // --- 💬 FRASES DEL ENCABEZADO (rotan solas, una distinta cada día) ---
+        const FRASES_SOPORTE = [
+            "Cada caso cerrado es un problema menos en la red.",
+            "Un buen diagnóstico empieza por escuchar.",
+            "La calma es la herramienta más subestimada del soporte.",
+            "Documentar hoy es ahorrar tiempo mañana.",
+            "No hay falla sin causa: solo pistas por encontrar.",
+            "La prisa complica lo que la paciencia resuelve.",
+            "Mejor lento y bien, que rápido y dos veces.",
+            "Tu registro es la memoria del equipo.",
+            "Detrás de cada IP hay una persona esperando.",
+            "Precisión, orden y seguimiento: así se cierra un caso.",
+            "Si la red no falla, revisa dos veces.",
+            "El mejor ticket es el que se documenta bien."
+        ];
+
+        function actualizarFraseDelDia() {
+            const quoteBox = document.getElementById('daily-quote');
+            if (!quoteBox || FRASES_SOPORTE.length === 0) return;
+
+            // Índice determinista por día: cambia a medianoche, no en cada recarga.
+            const hoy = new Date();
+            const dias = Math.floor(
+                (Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()) - Date.UTC(2026, 0, 1)) / 86400000
+            );
+            const idx = ((dias % FRASES_SOPORTE.length) + FRASES_SOPORTE.length) % FRASES_SOPORTE.length;
+
+            quoteBox.textContent = "“" + FRASES_SOPORTE[idx] + "”";
+            quoteBox.title = "Frase " + (idx + 1) + " de " + FRASES_SOPORTE.length + " · cambia cada día";
+        }
+
         window.onbeforeunload = function() {
             if(hasUnsavedChanges) return "¿Tienes cambios sin guardar. Seguro que quieres salir?";
         };
@@ -48,6 +79,9 @@
             loadRepTimes();
 
             if(localStorage.getItem('theme') === 'dark') document.body.classList.add('dark-mode');
+
+            actualizarFraseDelDia();
+
             const savedToken = localStorage.getItem('gh_token');
             if(savedToken) document.getElementById('token-admin').value = savedToken;
 

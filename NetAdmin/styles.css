@@ -32,7 +32,7 @@
         #app-container.visible { display: block; animation: fadeIn 0.4s; }
 
         .app-header-grid { display: grid; grid-template-columns: 1fr auto; gap: 15px; margin-bottom: 15px; align-items: center; }
-        .quote-box { background: linear-gradient(135deg, var(--primary), #0056b3); color: white; padding: 15px; border-radius: var(--radius); font-size: 0.9rem; font-style: italic; box-shadow: var(--shadow); }
+        .quote-box { background: linear-gradient(135deg, var(--primary), #0056b3); color: white; padding: 15px; border-radius: var(--radius); font-size: 0.9rem; font-style: italic; box-shadow: var(--shadow); display: flex; align-items: center; min-height: 52px; line-height: 1.35; }
         
         .controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; margin-bottom: 15px; }
         .btn-icon { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; width: 40px; height: 40px; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; position: relative; }
