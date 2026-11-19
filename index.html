@@ -1,220 +1,590 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Espiral</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        :root {
-            --bg-color: #f0f2f5;
-            --card-bg: #ffffff;
-            --primary: #2563eb;
-            --text-dark: #1f2937;
-            --text-light: #6b7280;
-            --danger: #ef4444; /* Color para notificaciones */
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Panel de aplicaciones de Espiral: NetAdmin, SuperKeys, BCVMonitor y Tecnoven.">
+  <meta name="theme-color" content="#0b0b12">
+  <title>Espiral · Panel</title>
 
-        body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background-color: var(--bg-color);
-            margin: 0;
-            padding: 2rem;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
+  <script>
+    // Tema antes de pintar, para que no haya destello.
+    try {
+      var guardado = localStorage.getItem('panel.tema');
+      var claro = guardado === 'claro' || (!guardado && window.matchMedia('(prefers-color-scheme: light)').matches);
+      document.documentElement.dataset.tema = claro ? 'claro' : 'oscuro';
+    } catch (e) {
+      document.documentElement.dataset.tema = 'oscuro';
+    }
+  </script>
 
-        h1 {
-            color: var(--text-dark);
-            margin-bottom: 1.5rem;
-        }
+  <style>
+    /* ====================== Variables y temas ====================== */
+    :root {
+      --fondo: #08080d;
+      --fondo-2: #0d0d15;
+      --superficie: rgba(255, 255, 255, 0.045);
+      --superficie-alta: rgba(255, 255, 255, 0.075);
+      --borde: rgba(255, 255, 255, 0.09);
+      --borde-fuerte: rgba(255, 255, 255, 0.2);
+      --texto: #f4f2f7;
+      --texto-suave: #9b97a8;
+      --sombra: 0 24px 60px rgba(0, 0, 0, 0.55);
+      --brillo: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 30px 70px rgba(0, 0, 0, 0.6);
+      --radio: 22px;
+      --radio-sm: 14px;
 
-        /* Estilos del Buscador */
-        .search-container {
-            width: 100%;
-            max-width: 600px;
-            margin-bottom: 2.5rem;
-            position: relative;
-        }
+      --tono-1: #6d8bff;
+      --tono-2: #f0b9c9;
+      --tono-3: #34d399;
+      --tono-4: #c084fc;
+    }
 
-        .search-input {
-            width: 100%;
-            padding: 1rem 1rem 1rem 3rem; /* Espacio para el icono */
-            font-size: 1.1rem;
-            border: 2px solid transparent;
-            border-radius: 50px; /* Bordes redondeados modernos */
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-            outline: none;
-            transition: all 0.3s ease;
-            box-sizing: border-box; /* Para que el padding no rompa el ancho */
-        }
+    html[data-tema="claro"] {
+      --fondo: #f3f1f6;
+      --fondo-2: #ffffff;
+      --superficie: rgba(255, 255, 255, 0.85);
+      --superficie-alta: #ffffff;
+      --borde: rgba(23, 18, 32, 0.09);
+      --borde-fuerte: rgba(23, 18, 32, 0.22);
+      --texto: #1a1622;
+      --texto-suave: #6b6577;
+      --sombra: 0 18px 40px rgba(30, 20, 50, 0.1);
+      --brillo: 0 10px 30px rgba(30, 20, 50, 0.08);
+      --tono-1: #3358e0;
+      --tono-2: #9c2b52;
+      --tono-3: #0d8a5f;
+      --tono-4: #7d3fc6;
+    }
 
-        .search-input:focus {
-            border-color: var(--primary);
-            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.2);
-        }
+    * { box-sizing: border-box; }
 
-        .search-icon {
-            position: absolute;
-            left: 1.2rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-light);
-        }
+    [hidden] { display: none !important; }
 
-        /* Grid */
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 1.5rem;
-            width: 100%;
-            max-width: 1200px;
-        }
+    html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 
-        /* Tarjetas */
-        .card {
-            background-color: var(--card-bg);
-            border-radius: 16px;
-            padding: 2rem;
-            text-decoration: none;
-            color: var(--text-dark);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            transition: transform 0.2s, box-shadow 0.2s;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            border: 1px solid rgba(0,0,0,0.05);
-            position: relative; /* Necesario para posicionar el badge */
-        }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: clamp(20px, 4vw, 44px) clamp(16px, 4vw, 40px) 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--fondo);
+      color: var(--texto);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, system-ui, sans-serif;
+      overflow-x: hidden;
+      transition: background-color 0.35s ease, color 0.35s ease;
+    }
 
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1);
-            border-color: var(--primary);
-        }
+    /* Halos de fondo */
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      z-index: -1;
+      width: 52vw;
+      height: 52vw;
+      max-width: 720px;
+      max-height: 720px;
+      border-radius: 50%;
+      filter: blur(90px);
+      opacity: 0.45;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+    }
 
-        .card-icon {
-            font-size: 2.5rem;
-            color: var(--primary);
-            margin-bottom: 1rem;
-        }
+    body::before { top: -18vw; left: -12vw; background: radial-gradient(circle, var(--tono-1), transparent 62%); }
+    body::after { bottom: -22vw; right: -14vw; background: radial-gradient(circle, var(--tono-2), transparent 62%); }
 
-        .card h3 {
-            margin: 0.5rem 0;
-            font-size: 1.2rem;
-        }
+    html[data-tema="claro"] body::before,
+    html[data-tema="claro"] body::after { opacity: 0.28; }
 
-        .card p {
-            color: var(--text-light);
-            font-size: 0.9rem;
-            margin: 0;
-        }
+    /* ============================ Cabecera ============================ */
+    .cabecera {
+      width: min(1080px, 100%);
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
 
-        /* Estilo del Badge (Notificación) */
-        .badge {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background-color: var(--danger);
-            color: white;
-            font-size: 0.75rem;
-            font-weight: bold;
-            padding: 4px 8px;
-            border-radius: 12px;
-            box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
-            animation: pulse 2s infinite;
-        }
+    .marca { display: flex; align-items: center; gap: 12px; }
 
-        /* Animación suave para llamar la atención */
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
+    .logo {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: linear-gradient(145deg, var(--tono-1), var(--tono-2));
+      color: #0b0b12;
+      font-size: 1.35rem;
+      font-weight: 900;
+      box-shadow: 0 10px 24px rgba(109, 139, 255, 0.35);
+    }
 
-        /* Clase para ocultar tarjetas al filtrar */
-        .hidden {
-            display: none !important;
-        }
-    </style>
+    .marca h1 { margin: 0; font-size: 1.05rem; letter-spacing: 0.02em; }
+    .marca p { margin: 2px 0 0; font-size: 0.78rem; color: var(--texto-suave); }
+
+    .boton-tema {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--borde);
+      border-radius: 14px;
+      background: var(--superficie);
+      color: var(--texto);
+      font-size: 1.1rem;
+      cursor: pointer;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      transition: transform 0.2s, border-color 0.2s, background-color 0.2s;
+    }
+
+    .boton-tema:hover { transform: translateY(-2px); border-color: var(--borde-fuerte); }
+    .boton-tema:focus-visible { outline: 2px solid var(--tono-1); outline-offset: 3px; }
+
+    /* ============================== Hero ============================== */
+    main { width: min(1080px, 100%); margin: 0 auto; flex: 1 0 auto; }
+
+    .hero { padding: clamp(38px, 7vw, 76px) 0 30px; max-width: 680px; }
+
+    .hero .saludo {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+      padding: 6px 12px;
+      border: 1px solid var(--borde);
+      border-radius: 999px;
+      background: var(--superficie);
+      color: var(--texto-suave);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .punto {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--tono-3);
+      box-shadow: 0 0 12px var(--tono-3);
+      animation: latido 2.4s ease-in-out infinite;
+    }
+
+    .hero h2 {
+      margin: 0 0 14px;
+      font-size: clamp(2rem, 5.2vw, 3.1rem);
+      line-height: 1.06;
+      letter-spacing: -0.03em;
+      font-weight: 800;
+    }
+
+    .hero h2 span {
+      background: linear-gradient(100deg, var(--tono-1), var(--tono-2) 55%, var(--tono-4));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero p { margin: 0; color: var(--texto-suave); font-size: clamp(0.95rem, 1.5vw, 1.05rem); line-height: 1.55; }
+
+    /* ============================ Buscador ============================ */
+    .buscador {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: min(440px, 100%);
+      margin-top: 26px;
+      padding: 12px 16px;
+      border: 1px solid var(--borde);
+      border-radius: 999px;
+      background: var(--superficie);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .buscador:focus-within {
+      border-color: var(--borde-fuerte);
+      box-shadow: 0 0 0 4px rgba(109, 139, 255, 0.14);
+    }
+
+    .buscador input {
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      background: transparent;
+      color: var(--texto);
+      font: inherit;
+      font-size: 16px;
+      outline: none;
+    }
+
+    .buscador input::placeholder { color: var(--texto-suave); }
+
+    .buscador kbd {
+      padding: 2px 7px;
+      border: 1px solid var(--borde);
+      border-radius: 6px;
+      background: var(--fondo-2);
+      color: var(--texto-suave);
+      font-family: inherit;
+      font-size: 0.7rem;
+    }
+
+    /* ============================= Tarjetas ============================ */
+    .grilla {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+      gap: clamp(14px, 2vw, 20px);
+      padding-bottom: 18px;
+    }
+
+    .tarjeta {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 22px;
+      border: 1px solid var(--borde);
+      border-radius: var(--radio);
+      background: var(--superficie);
+      color: var(--texto);
+      text-decoration: none;
+      box-shadow: var(--brillo);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      overflow: hidden;
+      transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.25s, box-shadow 0.25s, background-color 0.25s;
+      animation: entrada 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    }
+
+    .tarjeta:nth-child(1) { animation-delay: 0.04s; }
+    .tarjeta:nth-child(2) { animation-delay: 0.1s; }
+    .tarjeta:nth-child(3) { animation-delay: 0.16s; }
+    .tarjeta:nth-child(4) { animation-delay: 0.22s; }
+
+    /* Halo que sigue al puntero */
+    .tarjeta::before {
+      content: "";
+      position: absolute;
+      inset: -40% -20% auto;
+      height: 200px;
+      background: radial-gradient(circle at var(--x, 50%) 0%, var(--tono), transparent 62%);
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+
+    .tarjeta:hover::before, .tarjeta:focus-visible::before { opacity: 0.22; }
+
+    .tarjeta:hover, .tarjeta:focus-visible {
+      transform: translateY(-6px);
+      border-color: var(--borde-fuerte);
+      box-shadow: var(--sombra);
+      outline: none;
+    }
+
+    .tarjeta:focus-visible { box-shadow: 0 0 0 2px var(--tono), var(--sombra); }
+
+    .tarjeta[data-app="netadmin"] { --tono: var(--tono-1); }
+    .tarjeta[data-app="superkeys"] { --tono: var(--tono-2); }
+    .tarjeta[data-app="bcv"] { --tono: var(--tono-3); }
+    .tarjeta[data-app="tecnoven"] { --tono: var(--tono-4); }
+
+    .tarjeta-cabecera { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+
+    .tarjeta-icono {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      background: color-mix(in srgb, var(--tono) 16%, transparent);
+      border: 1px solid color-mix(in srgb, var(--tono) 32%, transparent);
+      font-size: 1.35rem;
+    }
+
+    .etiqueta {
+      padding: 5px 10px;
+      border: 1px solid color-mix(in srgb, var(--tono) 40%, transparent);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--tono) 12%, transparent);
+      color: var(--tono);
+      font-size: 0.66rem;
+      font-weight: 800;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .tarjeta h3 { margin: 0; font-size: 1.16rem; letter-spacing: -0.01em; }
+    .tarjeta p { margin: 6px 0 0; color: var(--texto-suave); font-size: 0.86rem; line-height: 1.45; }
+
+    .tarjeta-pie {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid var(--borde);
+      color: var(--texto-suave);
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .flecha { color: var(--tono); font-size: 1rem; transition: transform 0.25s; }
+    .tarjeta:hover .flecha { transform: translateX(4px); }
+
+    /* =============================== Vacío ============================= */
+    .sin-resultados {
+      margin: 40px 0;
+      padding: 34px 20px;
+      border: 1px dashed var(--borde);
+      border-radius: var(--radio);
+      color: var(--texto-suave);
+      text-align: center;
+      font-size: 0.92rem;
+    }
+
+    /* =============================== Pie =============================== */
+    .pie {
+      width: min(1080px, 100%);
+      margin: 40px auto 0;
+      padding: 26px 0 calc(28px + env(safe-area-inset-bottom, 0px));
+      border-top: 1px solid var(--borde);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--texto-suave);
+      font-size: 0.8rem;
+    }
+
+    .pie strong { color: var(--texto); }
+    .pie-mini { opacity: 0.75; }
+
+    /* ============================ Animaciones ========================== */
+    @keyframes entrada {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    @keyframes latido {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.82); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+
+    @media (max-width: 560px) {
+      .hero { padding-top: 34px; }
+      .marca p { display: none; }
+      .pie { flex-direction: column; align-items: flex-start; }
+    }
+
+    /* Compatibilidad: si el navegador no soporta color-mix, usa el tono plano */
+    @supports not (background: color-mix(in srgb, red 10%, transparent)) {
+      .tarjeta-icono { background: rgba(127, 127, 127, 0.14); border-color: var(--borde); }
+      .etiqueta { background: transparent; border-color: var(--borde); color: var(--texto-suave); }
+    }
+  </style>
 </head>
 <body>
 
-    <h1>Bienvenido al Panel</h1>
-
-    <div class="search-container">
-        <i class="fas fa-search search-icon"></i>
-        <input type="text" id="searchInput" class="search-input" placeholder="Buscar herramienta (ej: facturas, stock...)">
+  <header class="cabecera">
+    <div class="marca">
+      <div class="logo" aria-hidden="true">E</div>
+      <div>
+        <h1>Espiral</h1>
+        <p>Panel de aplicaciones</p>
+      </div>
     </div>
+    <button id="btn-tema" class="boton-tema" type="button" aria-label="Cambiar entre tema claro y oscuro" title="Cambiar tema">
+      <span id="icono-tema" aria-hidden="true">🌙</span>
+    </button>
+  </header>
 
-    <div class="dashboard-grid" id="cardGrid">
-        
-        <a href="https://leoemg365.github.io/Formatos/netadmin.html" class="card">
-            <span class="badge">1</span>
-            <div class="card-icon"><i class="fa-notdog fa-solid fa-desktop"></i>></div>
-            <h3>NetAdmin</h3>
-            <p>Gestor de Portapapeles y herramientas</p>
-        </a>
+  <main>
+    <section class="hero">
+      <span class="saludo"><span class="punto" aria-hidden="true"></span> Todo a un clic</span>
+      <h2>Tus herramientas,<br><span>en un solo lugar.</span></h2>
+      <p>Cuatro aplicaciones para el día a día: soporte, claves, tasas y reportes.</p>
 
-        <a href="https://leoemg365.github.io/Formatos/inventario.html" class="card">
-            <div class="card-icon"><i class="fas fa-boxes"></i></div>
-            <h3>Inventario</h3>
-            <p>Control de stock y almacén</p>
-        </a>
+      <div class="buscador">
+        <span aria-hidden="true">🔍</span>
+        <input id="buscar" type="search" placeholder="Buscar aplicación…" aria-label="Buscar aplicación" autocomplete="off">
+        <kbd>/</kbd>
+      </div>
+    </section>
 
-        <a href="/finanzas" class="card">
-            <div class="card-icon"><i class="fas fa-file-invoice-dollar"></i></div>
-            <h3>Finanzas</h3>
-            <p>Próximamente...</p>
-            <p>Facturación y Balances</p>
-        </a>
+    <section id="grilla" class="grilla" aria-label="Aplicaciones">
 
-        <a href="https://leoemg365.github.io/Formatos/Tecnoven_Formatos_V7.html" class="card">
-            <span class="badge">1</span>
-            <div class="card-icon"><i class="fas fa-clipboard-list"></i></div>
-            <h3>Redacción de Reportes</h3>
-            <p>Formatos y reportes</p>
-        </a>
+      <a class="tarjeta" href="NetAdmin/" data-app="netadmin" data-buscar="netadmin soporte contraloria enlaces contrasenas respuestas reportes herramienta">
+        <div class="tarjeta-cabecera">
+          <span class="tarjeta-icono" aria-hidden="true">🖥️</span>
+          <span class="etiqueta">Soporte</span>
+        </div>
+        <div>
+          <h3>NetAdmin</h3>
+          <p>Central de soporte: enlaces, credenciales, respuestas rápidas y reportes.</p>
+        </div>
+        <div class="tarjeta-pie"><span>Abrir</span><span class="flecha" aria-hidden="true">→</span></div>
+      </a>
 
-        <a href="/tools" class="card">
-            <div class="card-icon"><i class="fas fa-clipboard-list"></i></div>
-            <h3>Próximamente...</h3>
-            <p></p>
-        </a>
+      <a class="tarjeta" href="SuperKeys/" data-app="superkeys" data-buscar="superkeys claves contrasenas seguridad boveda cifrado">
+        <div class="tarjeta-cabecera">
+          <span class="tarjeta-icono" aria-hidden="true">🔐</span>
+          <span class="etiqueta">Seguridad</span>
+        </div>
+        <div>
+          <h3>SuperKeys</h3>
+          <p>Bóveda de contraseñas cifrada, con generador y respaldos.</p>
+        </div>
+        <div class="tarjeta-pie"><span>Abrir</span><span class="flecha" aria-hidden="true">→</span></div>
+      </a>
 
-        <a href="/settings" class="card">
-            <div class="card-icon"><i class="fas fa-cogs"></i></div>
-            <h3>Próximamente...</h3>
-            <p>A</p>
-        </a>
+      <a class="tarjeta" href="bcv-monitor.html" data-app="bcv" data-buscar="bcvmonitor bcv monitor dolar tasa cambio finanzas bolivar">
+        <div class="tarjeta-cabecera">
+          <span class="tarjeta-icono" aria-hidden="true">📈</span>
+          <span class="etiqueta">Finanzas</span>
+        </div>
+        <div>
+          <h3>BCVMonitor</h3>
+          <p>Seguimiento del dólar BCV y de las tasas de cambio.</p>
+        </div>
+        <div class="tarjeta-pie"><span>Abrir</span><span class="flecha" aria-hidden="true">→</span></div>
+      </a>
 
-    </div>
+      <a class="tarjeta" href="Tecnoven/" data-app="tecnoven" data-buscar="tecnoven reportes formatos inventario instalacion activacion solicitud">
+        <div class="tarjeta-cabecera">
+          <span class="tarjeta-icono" aria-hidden="true">📋</span>
+          <span class="etiqueta">Operaciones</span>
+        </div>
+        <div>
+          <h3>Tecnoven</h3>
+          <p>Formatos, reportes e inventario de instalaciones.</p>
+        </div>
+        <div class="tarjeta-pie"><span>Abrir</span><span class="flecha" aria-hidden="true">→</span></div>
+      </a>
 
-    <script>
-        // Seleccionamos el input y todas las tarjetas
-        const searchInput = document.getElementById('searchInput');
-        const cards = document.querySelectorAll('.card');
+    </section>
 
-        // Escuchamos cada vez que el usuario suelta una tecla
-        searchInput.addEventListener('keyup', (e) => {
-            const term = e.target.value.toLowerCase(); // Convertimos a minúsculas
+    <p id="sin-resultados" class="sin-resultados" hidden></p>
+  </main>
 
-            cards.forEach(card => {
-                // Obtenemos el título (h3) y la descripción (p) de cada tarjeta
-                const title = card.querySelector('h3').textContent.toLowerCase();
-                const desc = card.querySelector('p').textContent.toLowerCase();
+  <footer class="pie">
+    <p>Desarrollado por <strong>Leonardo Montiel</strong></p>
+    <p class="pie-mini">© <span id="anio">2026</span> Espiral</p>
+  </footer>
 
-                // Si el término está en el título O en la descripción
-                if (title.includes(term) || desc.includes(term)) {
-                    card.classList.remove('hidden'); // Mostrar
-                } else {
-                    card.classList.add('hidden'); // Ocultar
-                }
-            });
+  <script>
+    (function () {
+      'use strict';
+
+      var raiz = document.documentElement;
+      var botonTema = document.getElementById('btn-tema');
+      var iconoTema = document.getElementById('icono-tema');
+      var buscador = document.getElementById('buscar');
+      var tarjetas = Array.prototype.slice.call(document.querySelectorAll('.tarjeta'));
+      var vacio = document.getElementById('sin-resultados');
+
+      /* ------------------------------ Tema ------------------------------ */
+      function pintarTema() {
+        var oscuro = raiz.dataset.tema !== 'claro';
+        iconoTema.textContent = oscuro ? '🌙' : '☀️';
+        botonTema.setAttribute('aria-label', oscuro ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro');
+        botonTema.title = oscuro ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro';
+
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', oscuro ? '#08080d' : '#f3f1f6');
+      }
+
+      botonTema.addEventListener('click', function () {
+        var nuevo = raiz.dataset.tema === 'claro' ? 'oscuro' : 'claro';
+        raiz.dataset.tema = nuevo;
+        try { localStorage.setItem('panel.tema', nuevo); } catch (e) {}
+        pintarTema();
+      });
+
+      pintarTema();
+
+      /* ---------------------------- Buscador ---------------------------- */
+      function normalizar(texto) {
+        return (texto || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '');
+      }
+
+      function filtrar() {
+        var termino = normalizar(buscador.value.trim());
+        var visibles = 0;
+
+        tarjetas.forEach(function (tarjeta) {
+          var contenido = normalizar(tarjeta.dataset.buscar + ' ' + tarjeta.textContent);
+          var coincide = !termino || contenido.indexOf(termino) !== -1;
+          tarjeta.hidden = !coincide;
+          if (coincide) visibles += 1;
         });
-    </script>
+
+        if (visibles === 0) {
+          vacio.hidden = false;
+          vacio.textContent = 'No hay aplicaciones que coincidan con «' + buscador.value.trim() + '».';
+        } else {
+          vacio.hidden = true;
+        }
+      }
+
+      buscador.addEventListener('input', filtrar);
+
+      // Atajo "/" para buscar, salvo que ya se esté escribiendo.
+      document.addEventListener('keydown', function (evento) {
+        if (evento.key !== '/' || evento.ctrlKey || evento.metaKey || evento.altKey) return;
+
+        var activo = document.activeElement;
+        var escribiendo = activo && (activo.tagName === 'INPUT' || activo.tagName === 'TEXTAREA');
+
+        if (escribiendo) return;
+        evento.preventDefault();
+        buscador.focus();
+      });
+
+      /* ------------------------- Halo del puntero ------------------------ */
+      tarjetas.forEach(function (tarjeta) {
+        tarjeta.addEventListener('pointermove', function (evento) {
+          var caja = tarjeta.getBoundingClientRect();
+          var x = ((evento.clientX - caja.left) / caja.width) * 100;
+          tarjeta.style.setProperty('--x', x + '%');
+        });
+      });
+
+      /* ---------------------------- Detalles ---------------------------- */
+      document.getElementById('anio').textContent = new Date().getFullYear();
+
+      if (window.matchMedia) {
+        var consulta = window.matchMedia('(prefers-color-scheme: light)');
+        if (typeof consulta.addEventListener === 'function') {
+          consulta.addEventListener('change', function (evento) {
+            var guardado;
+            try { guardado = localStorage.getItem('panel.tema'); } catch (e) {}
+            if (guardado) return;
+            raiz.dataset.tema = evento.matches ? 'claro' : 'oscuro';
+            pintarTema();
+          });
+        }
+      }
+    })();
+  </script>
 
 </body>
 </html>
