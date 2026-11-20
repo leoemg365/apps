@@ -243,24 +243,24 @@
           "content": "Ambar_Download"
         },
         {
-          "id": 1795187786377,
-          "label": "Ambar Upload",
-          "content": "Ambar_Upload"
-        },
-        {
           "id": 1795187828649,
           "label": "Agata Download",
           "content": "Agata_Download"
         },
         {
-          "id": 1795187841586,
-          "label": "Agata Upload",
-          "content": "Agata_Upload"
-        },
-        {
           "id": 1795187863530,
           "label": "Jade Download",
           "content": "Jade_Download"
+        },
+        {
+          "id": 1795187786377,
+          "label": "Ambar Upload",
+          "content": "Ambar_Upload"
+        },
+        {
+          "id": 1795187841586,
+          "label": "Agata Upload",
+          "content": "Agata_Upload"
         },
         {
           "id": 1795187879629,
