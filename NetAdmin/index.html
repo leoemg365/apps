@@ -7,7 +7,8 @@
     <link rel="icon" href="https://cdn-icons-png.flaticon.com/128/4565/4565968.png" type="image/x-icon">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1877f2">
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <link rel="preconnect" href="https://api.github.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="stylesheet" href="styles.css">
     <script src="script.js" defer></script>
 </head>
@@ -64,8 +65,10 @@
 
         <div class="search-container">
             <span>🔍</span>
-            <input type="text" id="search-bar" placeholder="Buscar IPs, Notas, fallas..." onkeyup="filterUniversal()">
+            <input type="text" id="search-bar" placeholder="Buscar IPs, Notas, fallas..." oninput="onSearchInput()" aria-label="Buscar en toda la aplicación">
+            <kbd class="search-kbd" aria-hidden="true">/</kbd>
         </div>
+        <div id="search-summary" class="search-summary" hidden></div>
 
 
         <!-- El HTML del contador -->
@@ -80,11 +83,11 @@
 
         <div class="tabs-container">
             <div class="tabs">
-                <div class="tab active" onclick="switchTab('clip')">📋 Links / OLTs</div>
-                <div class="tab" onclick="switchTab('pass')">🔐 Contraseñas</div>
-                <div class="tab" id="tab-resp" onclick="switchTab('resp')">💬 Respuestas <span class="badge" id="badge-resp">1</span></div>
-                <div class="tab" id="tab-news" onclick="switchTab('news')">📢 Novedades <span class="badge" id="badge-news">1</span></div>
-                <div class="tab" onclick="switchTab('tools')">🛠️ Herramientas</div>
+                <div class="tab active" data-tab="clip" onclick="switchTab('clip')">📋 Links / OLTs</div>
+                <div class="tab" data-tab="pass" onclick="switchTab('pass')">🔐 Contraseñas</div>
+                <div class="tab" id="tab-resp" data-tab="resp" onclick="switchTab('resp')">💬 Respuestas <span class="badge" id="badge-resp">1</span></div>
+                <div class="tab" id="tab-news" data-tab="news" onclick="switchTab('news')">📢 Novedades <span class="badge" id="badge-news">1</span></div>
+                <div class="tab" data-tab="tools" onclick="switchTab('tools')">🛠️ Herramientas</div>
             </div>
         </div>
 
@@ -431,7 +434,7 @@
         </div>
 
         <footer style="text-align:center; color:var(--text-sec); margin-top:40px; font-size:0.9em; opacity:0.8;">
-            NetAdmin Soporte Pro v18.0<br>© 2026 Espiral - Leonardo Montiel<br>
+            NetAdmin Soporte Pro v19.0<br>© 2026 Espiral - Leonardo Montiel<br>
             <a href="https://wa.me/584121982608" target="_blank" style="text-decoration:none; display:inline-block; margin-top:12px;">
                 <button style="padding:8px 20px; border-radius:20px; border:1px solid var(--border); background:var(--bg-surface); color:var(--text-main); cursor:pointer; font-weight:bold;">Soporte Técnico / Developer</button>
             </a>
@@ -505,17 +508,18 @@
         </div>
     </div>
 
-    <div id="toast">Copiado al portapapeles ✅</div>
+    <div id="toast" role="status" aria-live="polite">Copiado al portapapeles ✅</div>
     <audio id="alarm-sound" loop src="data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"></audio>
 
     <dialog id="modalActualizaciones">
     <h2>🚀 ¡Nuevas funciones disponibles!</h2>
     <ul>
-        <li><b>Copias recientes:</b> panel lateral con las últimas 4 copias; toca una para volver a pegarla.</li>
-        <li><b>Sugerencias inteligentes:</b> muestra primero lo que copiaste en la pestaña activa (Respuestas, Links o Contraseñas).</li>
-        <li><b>Más usado, más arriba:</b> si repites un texto, sube solo y lleva su contador de usos.</li>
-        <li><b>Portapapeles externo:</b> con 📥 traes lo último que copiaste fuera de la app.</li>
-        <li><b>Se recuerda:</b> el panel abierto/cerrado y el historial quedan guardados en este navegador.</li>
+        <li><b>Arranque más rápido:</b> la app abre al instante desde su copia local y se actualiza sola en segundo plano.</li>
+        <li><b>Funciona sin conexión:</b> el contenido queda en caché y puedes seguir consultándolo y copiando.</li>
+        <li><b>Búsqueda global:</b> busca en todas las pestañas a la vez y salta a la que tenga resultados.</li>
+        <li><b>Atajos:</b> <b>/</b> para buscar, <b>1–5</b> para cambiar de pestaña, <b>Enter</b> para copiar el primer resultado y <b>Esc</b> para cerrar.</li>
+        <li><b>Animaciones más suaves:</b> transiciones cuidadas y respeto por «reducir movimiento» del sistema.</li>
+        <li><b>Copias recientes:</b> sigue igual, ahora con el panel más fluido.</li>
     </ul>
     <button id="cerrarActualizacion">Entendido, ¡gracias!</button>
 </dialog>

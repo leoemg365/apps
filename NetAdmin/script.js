@@ -12,18 +12,76 @@
         });
         
         const GH = { USER: 'leoemg365', REPO: 'Formatos', FILE: 'db.json' };
-        
+
+        // Copia local del db.json: abre al instante y permite trabajar sin conexión.
+        const CACHE_KEY = 'netAdminDbCache';
+        const CACHE_VERSION = 1;
+
         let db = null;
-        let isAdmin = false; let adminPass = ''; let ghToken = ''; let fileSha = null;
-        let hasUnsavedChanges = false; 
+        let isAdmin = false; let adminPass = ''; let ghToken = ''; let fileSha = null; let dbEtag = null;
+        let hasUnsavedChanges = false;
         let isSaveCooldown = false; // Esto es para bloquear el spam
-        
+        let lastFetchAt = 0;
+
         let currentRespFilterMain = 'General'; let currentRespFilterSub = 'Todas';
         let currentNewsFilter = 'Todas';
-        let currentToolMode = 'rep'; 
-        
+        let currentToolMode = 'rep';
+        let currentTab = 'clip';
+        let checkTimer = null;
+
         let dailyExitTime = null; let alarmTriggered = false; const alarmAudio = document.getElementById('alarm-sound');
         let formCallback = null; let confirmCallback = null; let textToCopyFromPreview = ""; let previewTitleActual = "";
+
+        // Vistas pendientes de render: solo se rehace lo que cambió.
+        const dirtyViews = new Set(['clip', 'pass', 'resp', 'news', 'tools']);
+        let renderScheduled = false;
+
+        // --- Utilidades compartidas ---
+        const $id = (id) => document.getElementById(id);
+
+        function normalizar(texto) {
+            try {
+                return String(texto == null ? '' : texto).toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+            } catch (e) {
+                return String(texto == null ? '' : texto).toLowerCase();
+            }
+        }
+
+        function crear(tag, clase, texto) {
+            const el = document.createElement(tag);
+            if (clase) el.className = clase;
+            if (texto != null) el.textContent = texto;
+            return el;
+        }
+
+        function crearBoton(icono, titulo, datos) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'mini-btn';
+            b.textContent = icono;
+            if (titulo) b.title = titulo;
+            Object.keys(datos || {}).forEach((k) => { b.dataset[k] = datos[k]; });
+            return b;
+        }
+
+        function debounce(fn, espera) {
+            let t = null;
+            return function (...args) {
+                clearTimeout(t);
+                t = setTimeout(() => fn.apply(this, args), espera);
+            };
+        }
+
+        /** Escapa lo escrito por el usuario y conserva solo <strong> y <br> del formato. */
+        function htmlSeguro(texto) {
+            const permitidos = [];
+            const marcado = String(texto == null ? '' : texto).replace(/<\/?(?:strong|br)\s*\/?>/gi, (tag) => {
+                permitidos.push(tag);
+                return `\u0000${permitidos.length - 1}\u0000`;
+            });
+            const escapado = marcado.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return escapado.replace(/\u0000(\d+)\u0000/g, (m, i) => permitidos[Number(i)]);
+        }
         
         // REPORTE 5 VARIABLES
         let currentRepMode = 1; let r4Status = 'PRESENTADA'; let finalReportAsterisks = "";
@@ -85,22 +143,31 @@
             const savedToken = localStorage.getItem('gh_token');
             if(savedToken) document.getElementById('token-admin').value = savedToken;
 
-            setInterval(checkTime, 30000);
+            checkTimer = setInterval(checkTime, 30000);
 
-            const session = JSON.parse(localStorage.getItem('netAdminSession'));
+            let session = null;
+            try { session = JSON.parse(localStorage.getItem('netAdminSession')); } catch (e) { session = null; }
             if(session) {
                 isAdmin = session.isAdmin; adminPass = session.adminPass; ghToken = session.ghToken; dailyExitTime = session.exitTime;
                 enterApp(session.name, true);
 
-                // --- NUEVO: RESTAURAR ESTADO (PERSISTENCIA) ---
+                // --- RESTAURAR ESTADO (PERSISTENCIA) ---
                 const lastTab = localStorage.getItem('activeTab');
                 const lastTool = localStorage.getItem('activeToolMode');
                 const lastRep = localStorage.getItem('activeRepMode');
-                
-                if(lastTab) switchTab(lastTab);
+
+                if(lastTab && $id(`view-${lastTab}`)) switchTab(lastTab);
                 if(lastTool) switchToolMode(lastTool);
                 if(lastRep) switchRepMode(parseInt(lastRep));
             }
+
+            // Estado de conexión visible para el usuario.
+            window.addEventListener('online', () => { setSyncStatus('online'); fetchData({ silent: true }).catch(() => {}); });
+            window.addEventListener('offline', () => setSyncStatus('offline'));
+
+            // Precarga OCR cuando el usuario apunta a la pestaña, no antes.
+            const pillOCR = $id('pill-tool-ocr');
+            if(pillOCR) pillOCR.addEventListener('pointerenter', () => { loadOCR().catch(() => {}); }, { once: true });
 
             document.body.addEventListener('click', function unlockAudio() {
                 alarmAudio.play().then(() => {
@@ -183,19 +250,84 @@
             dailyExitTime = `${String(h).padStart(2,'0')}:${m}`;
         }
 
+        // --- CACHÉ LOCAL DEL db.json ---
+        function normalizeDb(entrante) {
+            const data = entrante || {};
+            if(!data.config) data.config = { supportPass: "45637954", adminPass: "0800" };
+            if(!data.electricalNodes) data.electricalNodes = ['Mecocal', 'Ciudad Ojeda'];
+            ['clipboard', 'passwords', 'responses', 'news'].forEach(k => { if(!Array.isArray(data[k])) data[k] = []; });
+            data.clipboard.forEach(l => { if(!Array.isArray(l.cards)) l.cards = []; });
+            data.passwords.forEach(l => { if(!Array.isArray(l.cards)) l.cards = []; });
+            data.responses.forEach(l => { if(!Array.isArray(l.cards)) l.cards = []; });
+            return data;
+        }
+
+        function leerCacheDb() {
+            try {
+                const crudo = JSON.parse(localStorage.getItem(CACHE_KEY));
+                if(!crudo || crudo.v !== CACHE_VERSION || !crudo.json) return null;
+                return { db: normalizeDb(JSON.parse(crudo.json)), sha: crudo.sha || null, etag: crudo.etag || null, pendiente: !!crudo.pendiente };
+            } catch(e) { return null; }
+        }
+
+        function guardarCacheDb(pendiente) {
+            if(!db) return;
+            try {
+                localStorage.setItem(CACHE_KEY, JSON.stringify({
+                    v: CACHE_VERSION,
+                    json: JSON.stringify(db),
+                    sha: fileSha,
+                    etag: dbEtag,
+                    pendiente: !!pendiente,
+                    at: Date.now()
+                }));
+            } catch(e) { /* Sin espacio: seguimos solo en memoria. */ }
+        }
+
+        // Guarda los cambios locales para que sobrevivan a un cierre o corte de luz.
+        const guardarCacheLocal = debounce(() => {
+            if(hasUnsavedChanges) guardarCacheDb(true);
+        }, 800);
+
+        /** Carga la copia local si existe; no hace red. */
+        async function ensureDb() {
+            if(db) return db;
+            const cache = leerCacheDb();
+            if(cache) {
+                db = cache.db; fileSha = cache.sha; dbEtag = cache.etag;
+                if(cache.pendiente) hasUnsavedChanges = true;
+                setSyncStatus(cache.pendiente ? 'offline' : 'cache');
+            }
+            return db;
+        }
+
+        function setSyncStatus(estado) {
+            const status = $id('sync-status');
+            if(!status) return;
+            status.classList.remove('hidden');
+            const mapa = {
+                online: ['☁️', 'Conectado', 'var(--success)'],
+                cache: ['💾', 'Copia local', 'var(--text-sec)'],
+                offline: ['⚠️', 'Sin conexión', 'var(--danger)'],
+                connecting: ['☁️', 'Conectando...', 'var(--text-sec)'],
+                saved: ['☁️', 'Guardado con éxito', 'var(--success)']
+            };
+            const info = mapa[estado] || mapa.online;
+            status.textContent = `${info[0]} ${info[1]}`;
+            status.style.color = info[2];
+        }
+
         async function authLogin(mode) {
             const btn = mode === 'admin' ? document.getElementById('btn-login-admin') : document.getElementById('btn-login-support');
             const loader = btn.querySelector('.loader'); const span = btn.querySelector('span:not(.loader)');
             loader.style.display = 'inline-block'; span.innerText = 'Verificando...'; btn.disabled = true;
 
             try {
-                const url = `https://api.github.com/repos/${GH.USER}/${GH.REPO}/contents/${GH.FILE}`;
-                const res = await fetch(url);
-                if(!res.ok) throw new Error("Error al conectar con la Nube");
-                const data = await res.json(); fileSha = data.sha;
-                db = JSON.parse(decodeURIComponent(escape(atob(data.content))));
-                if(!db.config) db.config = { supportPass: "45637954", adminPass: "0800" };
-                if(!db.electricalNodes) db.electricalNodes = ['Mecocal', 'Ciudad Ojeda']; // Inicializa BD Rep 5
+                // Primero la copia local (abre al instante), luego la nube.
+                await ensureDb();
+                if(!db) await fetchData({ render: false });
+
+                if(!db) throw new Error("Sin conexión y sin copia local. Conéctate una vez para poder usar la app offline.");
 
                 if(mode === 'support') {
                     const p = document.getElementById('pass-support').value;
@@ -208,7 +340,10 @@
                     isAdmin = true; adminPass = p; ghToken = t; localStorage.setItem('gh_token', t);
                     enterApp("Administrador", false);
                 }
-            } catch(e) { alert(e.message); } 
+            } catch(e) {
+                const sinRed = (!navigator.onLine || /fetch|network|load failed/i.test(e.message || '')) && !db;
+                alert(sinRed ? "Sin conexión y sin copia local. Conéctate una vez para poder usar la app offline." : (e.message || "No se pudo iniciar sesión"));
+            }
             finally { loader.style.display = 'none'; span.innerText = mode === 'admin' ? 'Acceso Total' : 'Ingresar'; btn.disabled = false; }
         }
 
@@ -231,12 +366,23 @@
                 document.getElementById('r5-admin-tools').classList.remove('hidden');
             }
             if ("Notification" in window) Notification.requestPermission();
-            
-            if(isAuto && !db) fetchData(); 
-            else {
-                document.getElementById('sync-status').innerHTML = "☁️ <span>Conectado</span>"; document.getElementById('sync-status').style.color = "var(--success)";
+
+            if(db) {
+                setSyncStatus(navigator.onLine ? 'online' : 'offline');
                 renderAll(); updateR5Dropdown(); updateLivePreview(); checkNotifications();
+                if(hasUnsavedChanges) {
+                    const btnGuardar = $id('btn-save-batch');
+                    if(btnGuardar) btnGuardar.classList.remove('hidden');
+                }
                 if(isAdmin) { document.getElementById('cfg-sup-pass').value = db.config.supportPass; document.getElementById('cfg-adm-pass').value = db.config.adminPass; }
+
+                // Revalidar con ETag: un 304 no consume cuota. Nunca pisa cambios locales.
+                if(Date.now() - lastFetchAt > 60000) {
+                    fetchData({ silent: true }).catch(() => setSyncStatus(navigator.onLine ? 'online' : 'offline'));
+                }
+            } else {
+                setSyncStatus('connecting');
+                fetchData().catch(() => setSyncStatus('offline'));
             }
         }
 
@@ -249,34 +395,105 @@
             }); 
         }
 
-        function markUnsaved() {
+        function markUnsaved(view) {
             hasUnsavedChanges = true;
-            document.getElementById('sync-status').classList.add('hidden');
-            document.getElementById('btn-save-batch').classList.remove('hidden');
-            renderAll(); checkNotifications();
+            const status = $id('sync-status'); if(status) status.classList.add('hidden');
+            const btnGuardar = $id('btn-save-batch'); if(btnGuardar) btnGuardar.classList.remove('hidden');
+
+            if(view) dirtyViews.add(view);
+            else ['clip', 'pass', 'resp', 'news'].forEach(v => dirtyViews.add(v));
+
+            guardarCacheLocal();
+            scheduleRender();
+            checkNotifications();
         }
 
-        async function fetchData() {
-            const status = document.getElementById('sync-status');
+        function markViewDirty(view) { dirtyViews.add(view); scheduleRender(); }
+
+        function scheduleRender() {
+            if(renderScheduled) return;
+            renderScheduled = true;
+            requestAnimationFrame(() => {
+                renderScheduled = false;
+                renderView(currentTab);
+            });
+        }
+
+        /** Renderiza una vista solo si está sucia (o si se fuerza). */
+        function renderView(view, force = false) {
+            if(!db) return;
+            if(!force && !dirtyViews.has(view)) return;
+            dirtyViews.delete(view);
+            if(view === 'clip') renderGeneric('clipboard', 'view-clip');
+            else if(view === 'pass') renderGeneric('passwords', 'view-pass');
+            else if(view === 'resp') renderResp();
+            else if(view === 'news') renderNews();
+
+            aplicarFiltros();
+        }
+
+        function renderAll() {
+            if(!db) return;
+            ['clip', 'pass', 'resp', 'news', 'tools'].forEach(v => dirtyViews.add(v));
+            renderView(currentTab, true);
+        }
+
+        async function fetchData({ silent = false, render = true, force = false } = {}) {
             const url = `https://api.github.com/repos/${GH.USER}/${GH.REPO}/contents/${GH.FILE}`;
-            const headers = isAdmin ? { 'Authorization': `token ${ghToken}` } : {}; 
+            const headers = {};
+            if(isAdmin && ghToken) headers['Authorization'] = `token ${ghToken}`;
+            if(dbEtag && !force) headers['If-None-Match'] = dbEtag;
+
+            if(!silent) setSyncStatus('connecting');
             try {
-                const res = await fetch(url, { headers }); if(!res.ok) throw new Error();
-                const data = await res.json(); fileSha = data.sha;
-                db = JSON.parse(decodeURIComponent(escape(atob(data.content))));
-                if(!db.config) db.config = { supportPass: "45637954", adminPass: "0800" };
-                if(!db.electricalNodes) db.electricalNodes = ['Mecocal', 'Ciudad Ojeda']; 
-                
-                status.innerHTML = "☁️ <span>Conectado</span>"; status.style.color = "var(--success)";
-                renderAll(); updateR5Dropdown(); updateLivePreview(); checkNotifications();
-                if(isAdmin) { document.getElementById('cfg-sup-pass').value = db.config.supportPass; document.getElementById('cfg-adm-pass').value = db.config.adminPass; }
-            } catch(e) { status.innerHTML = "⚠️ <span>Sin conexión</span>"; status.style.color = "var(--danger)"; }
+                const res = await fetch(url, { headers, cache: 'no-store' });
+
+                if(res.status === 304) { // Sin cambios: no gasta cuota de la API.
+                    lastFetchAt = Date.now();
+                    setSyncStatus('online');
+                    return db;
+                }
+                if(!res.ok) throw new Error(`GitHub ${res.status}`);
+
+                const data = await res.json();
+                const remoto = normalizeDb(JSON.parse(decodeURIComponent(escape(atob(data.content)))));
+
+                // Si el usuario tiene cambios locales sin guardar, no se pisan.
+                if(!db || !hasUnsavedChanges) {
+                    db = remoto;
+                    fileSha = data.sha;
+                    dbEtag = res.headers.get('ETag') || dbEtag;
+                    guardarCacheDb();
+                    ['clip', 'pass', 'resp', 'news', 'tools'].forEach(v => dirtyViews.add(v));
+
+                    if(render && $id('app-container').classList.contains('visible')) {
+                        renderView(currentTab, true);
+                        updateR5Dropdown(); updateLivePreview(); checkNotifications();
+                        if(isAdmin) { $id('cfg-sup-pass').value = db.config.supportPass; $id('cfg-adm-pass').value = db.config.adminPass; }
+                    }
+                } else {
+                    // Permite guardar encima de la última versión remota.
+                    fileSha = data.sha;
+                }
+
+                lastFetchAt = Date.now();
+                setSyncStatus('online');
+                return db;
+            } catch(e) {
+                if(!silent) setSyncStatus('offline');
+                throw e;
+            }
         }
 
         async function pushData() {
             // Si no es Admin o si el temporizador está activo, no hace nada
-            if(!isAdmin || isSaveCooldown) return; 
-            
+            if(!isAdmin || isSaveCooldown) return;
+
+            if(!navigator.onLine) {
+                alert("Sin conexión: tus cambios están guardados en este dispositivo. Vuelve a intentarlo cuando recuperes internet.");
+                return;
+            }
+
             const btn = document.getElementById('btn-save-batch'); 
             const loader = document.getElementById('save-loader'); 
             const txt = document.getElementById('save-text');
@@ -286,24 +503,38 @@
             btn.disabled = true;
 
             const url = `https://api.github.com/repos/${GH.USER}/${GH.REPO}/contents/${GH.FILE}`;
-            const body = { message: "Update via WebApp (Batch)", content: btoa(unescape(encodeURIComponent(JSON.stringify(db, null, 2)))), sha: fileSha };
+            // JSON compacto: ~30 % menos bytes que con sangría.
+            const contenido = btoa(unescape(encodeURIComponent(JSON.stringify(db))));
+            const subir = (sha) => fetch(url, {
+                method: 'PUT',
+                headers: { 'Authorization': `token ${ghToken}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: "Update via WebApp (Batch)", content: contenido, sha })
+            });
             
             try {
-                const res = await fetch(url, { method:'PUT', headers: {'Authorization': `token ${ghToken}`, 'Content-Type': 'application/json'}, body: JSON.stringify(body) });
-                if(res.ok) { 
-                    fileSha = (await res.json()).content.sha; 
-                    hasUnsavedChanges = false; 
-                    
-                    const status = document.getElementById('sync-status'); 
-                    status.classList.remove('hidden'); 
-                    status.innerHTML = "☁️ <span>Guardado con éxito</span>"; 
-                    setTimeout(()=>status.innerHTML="☁️ <span>Conectado</span>", 2500); 
-                    
-                    // Iniciar el escudo protector de 60 segundos
-                    iniciarCooldownGuardado();
-                } else throw new Error();
+                let res = await subir(fileSha);
+
+                // 409 = alguien guardó antes. Se refresca el sha y se reintenta una vez.
+                if(res.status === 409) {
+                    const ultimo = await fetch(url, { headers: { 'Authorization': `token ${ghToken}` }, cache: 'no-store' });
+                    if(ultimo.ok) {
+                        fileSha = (await ultimo.json()).sha;
+                        res = await subir(fileSha);
+                    }
+                }
+                if(!res.ok) throw new Error(`GitHub ${res.status}`);
+
+                fileSha = (await res.json()).content.sha;
+                hasUnsavedChanges = false;
+                guardarCacheDb();
+
+                setSyncStatus('saved');
+                setTimeout(() => { if(!hasUnsavedChanges) setSyncStatus('online'); }, 2500);
+
+                // Iniciar el escudo protector de 60 segundos
+                iniciarCooldownGuardado();
             } catch(e) { 
-                alert("Error al subir a GitHub. Verifica tu Token."); 
+                alert(`Error al subir a GitHub (${e.message}). Verifica tu Token.`); 
                 loader.style.display = 'none'; 
                 txt.innerText = '💾 Guardar en la Nube'; 
                 btn.disabled = false;
@@ -365,149 +596,465 @@
             else { bResp.style.display = 'none'; if(!document.getElementById('view-resp').classList.contains('hidden')) localStorage.setItem('lastSeenResp', maxRespId); }
         }
 
+        // --- NAVEGACIÓN, BÚSQUEDA GLOBAL Y DELEGACIÓN DE EVENTOS ---
+        const VISTAS = ['clip', 'pass', 'resp', 'news', 'tools'];
+        const ETIQUETAS_VISTA = { clip: 'Links', pass: 'Contraseñas', resp: 'Respuestas', news: 'Novedades', tools: 'Herramientas' };
+        let searchQuery = '';
+        const scrollPorVista = {};
+
         function switchTab(t) {
+            if(!VISTAS.includes(t) || !$id(`view-${t}`)) return;
+            if(currentTab && scrollPorVista) scrollPorVista[currentTab] = window.scrollY || 0;
+
+            currentTab = t;
             localStorage.setItem('activeTab', t);
-            document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-            Array.from(document.querySelectorAll('.tab')).forEach(el => {
-                if(el.getAttribute('onclick') && el.getAttribute('onclick').includes(t)) el.classList.add('active');
-            });
-            ['clip','pass','resp','news','tools'].forEach(v => {
-                const view = document.getElementById(`view-${v}`);
-                if(view) view.classList.add('hidden');
-            });
-            const targetView = document.getElementById(`view-${t}`);
-            if(targetView) targetView.classList.remove('hidden');
-            checkNotifications(); 
-        }
 
-        function filterUniversal() {
-            const query = document.getElementById('search-bar').value.toLowerCase();
-            const views = document.querySelectorAll('.searchable-view:not(.hidden)');
-            if(query.trim() === '') {
-                document.querySelectorAll('.card, .list-box').forEach(el => el.style.display = '');
-                if(!document.getElementById('view-resp').classList.contains('hidden')) filterRespSub(currentRespFilterSub);
-                if(!document.getElementById('view-news').classList.contains('hidden')) filterNews(currentNewsFilter);
-                return;
+            document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.tab === t));
+            VISTAS.forEach(v => {
+                const view = $id(`view-${v}`);
+                if(view) view.classList.toggle('hidden', v !== t);
+            });
+
+            renderView(t);
+            checkNotifications();
+            animarVista($id(`view-${t}`));
+
+            if(Object.prototype.hasOwnProperty.call(scrollPorVista, t)) {
+                window.scrollTo(0, scrollPorVista[t]);
             }
-            if(!document.getElementById('view-resp').classList.contains('hidden')) document.querySelectorAll('#view-resp .card').forEach(c => c.style.display = '');
-            if(!document.getElementById('view-news').classList.contains('hidden')) document.querySelectorAll('#view-news .card').forEach(c => c.style.display = '');
+        }
 
-            views.forEach(view => {
-                view.querySelectorAll('.list-box, #resp-grid, #news-grid').forEach(container => {
-                    let hasVis = false;
-                    container.querySelectorAll('.card').forEach(card => {
-                        if(card.innerText.toLowerCase().includes(query)) { card.style.display = ''; hasVis = true; } else card.style.display = 'none';
-                    });
-                    if(container.classList.contains('list-box')) {
-                        if(container.querySelector('.list-head span').innerText.toLowerCase().includes(query)) { container.style.display = ''; container.querySelectorAll('.card').forEach(c => c.style.display = ''); } 
-                        else container.style.display = hasVis ? '' : 'none';
+        function animarVista(view) {
+            if(!view) return;
+            if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            view.classList.remove('entrando');
+            void view.offsetWidth;
+            view.classList.add('entrando');
+            Array.from(view.querySelectorAll('.card')).slice(0, 40).forEach((card, i) => {
+                card.style.setProperty('--i', Math.min(i, 10));
+            });
+            clearTimeout(view._animTimer);
+            view._animTimer = setTimeout(() => view.classList.remove('entrando'), 700);
+        }
+
+        const onSearchInput = debounce(() => {
+            const barra = $id('search-bar');
+            searchQuery = normalizar(barra ? barra.value : '').trim();
+
+            if(searchQuery) {
+                asegurarVistasRenderizadas();
+                const conteo = aplicarFiltros();
+                if(currentTab !== 'tools' && !conteo[currentTab]) {
+                    const destino = VISTAS.find(v => v !== 'tools' && conteo[v] > 0);
+                    if(destino) switchTab(destino);
+                }
+            } else {
+                aplicarFiltros();
+            }
+        }, 150);
+
+        function asegurarVistasRenderizadas() {
+            VISTAS.forEach(v => renderView(v));
+        }
+
+        function categoriaCoincide(card) {
+            if(card.dataset.subcat !== undefined && currentRespFilterSub !== 'Todas' && card.dataset.subcat !== currentRespFilterSub) return false;
+            if(card.dataset.cat !== undefined && currentNewsFilter !== 'Todas' && card.dataset.cat !== currentNewsFilter) return false;
+            return true;
+        }
+
+        /** Única fuente de verdad de qué tarjeta se ve: búsqueda + filtro de categoría. */
+        function aplicarFiltros() {
+            const q = searchQuery;
+            const conteo = { clip: 0, pass: 0, resp: 0, news: 0 };
+
+            VISTAS.forEach(v => {
+                const view = $id(`view-${v}`);
+                if(!view) return;
+
+                view.querySelectorAll('.card').forEach(card => {
+                    if(card.classList.contains('btn-add')) {
+                        card.classList.toggle('oculto', !!q);
+                        return;
                     }
+                    const box = card.closest('.list-box');
+                    const tituloCoincide = !!q && !!box && normalizar(box.dataset.buscar || '').includes(q);
+                    const coincideBusqueda = !q || tituloCoincide || normalizar(card.dataset.buscar || '').includes(q);
+                    const visible = coincideBusqueda && categoriaCoincide(card);
+                    card.classList.toggle('oculto', !visible);
+                    if(visible && conteo[v] !== undefined) conteo[v]++;
                 });
+
+                view.querySelectorAll('.list-box').forEach(box => {
+                    if(!box.querySelector('.card')) return;
+                    const filtrando = !!q || (v === 'resp' && currentRespFilterSub !== 'Todas') || (v === 'news' && currentNewsFilter !== 'Todas');
+                    const visibles = box.querySelectorAll('.card:not(.oculto):not(.btn-add)').length;
+                    box.classList.toggle('oculto', filtrando && visibles === 0);
+                });
+
+                const tab = document.querySelector(`.tab[data-tab="${v}"]`);
+                if(tab) tab.classList.toggle('con-resultados', !!q && conteo[v] > 0);
+            });
+
+            const resumen = $id('search-summary');
+            if(resumen) {
+                if(!q) {
+                    resumen.hidden = true;
+                    resumen.textContent = '';
+                } else {
+                    const total = Object.keys(conteo).reduce((suma, k) => suma + conteo[k], 0);
+                    const partes = VISTAS.filter(v => conteo[v] > 0).map(v => `${conteo[v]} en ${ETIQUETAS_VISTA[v]}`);
+                    resumen.hidden = false;
+                    resumen.textContent = total ? `${total} coincidencia${total === 1 ? '' : 's'} · ${partes.join(' · ')}` : 'Sin coincidencias. Prueba con otra palabra.';
+                }
+            }
+            return conteo;
+        }
+
+        function limpiarBusqueda() {
+            const barra = $id('search-bar');
+            if(barra) barra.value = '';
+            searchQuery = '';
+            aplicarFiltros();
+        }
+
+        function vistaDeTipo(type) {
+            return type === 'clipboard' ? 'clip' : type === 'passwords' ? 'pass' : type === 'responses' ? 'resp' : 'news';
+        }
+
+        /** Un solo listener para todas las tarjetas y botones generados. */
+        function alHacerClic(e) {
+            const objetivo = e.target.closest ? e.target.closest('[data-action]') : null;
+            if(!objetivo || !objetivo.dataset.action || !db) return;
+
+            const d = objetivo.dataset;
+            const accion = d.action;
+
+            if(accion === 'reveal') { objetivo.classList.toggle('revelada'); return; }
+
+            const type = d.type;
+            const l = parseInt(d.l, 10);
+            const c = parseInt(d.c, 10);
+            const lista = type && db[type] ? db[type][l] : null;
+            const item = lista && lista.cards ? lista.cards[c] : null;
+
+            switch(accion) {
+                case 'copy':
+                    if(!item) return;
+                    if(type === 'passwords') copy(item.pass, { etiqueta: item.label, origen: 'password' });
+                    else copy(item.content, { etiqueta: item.label, origen: type === 'responses' ? 'respuesta' : 'link' });
+                    break;
+                case 'copy-user': if(item) copy(item.user, { etiqueta: item.label, origen: 'password' }); break;
+                case 'copy-pass': if(item) copy(item.pass, { etiqueta: item.label, origen: 'password' }); break;
+                case 'preview-card':
+                    if(!item) return;
+                    if(type === 'passwords') openPreview(item.label, `Usuario: ${item.user}\nClave: ${item.pass}`, item.pass);
+                    else openPreview(item.label, item.content, item.content);
+                    break;
+                case 'edit-card':
+                    if(type === 'responses') reqAdminEditCardResp(l, c); else reqAdminEditCard(type, l, c);
+                    break;
+                case 'del-card':
+                    reqAdminDel(() => {
+                        if(type === 'responses') delCardResp(l, c); else delCard(type, l, c);
+                    });
+                    break;
+                case 'move-card': moveCard(type, l, c, parseInt(d.dir, 10)); break;
+                case 'move-list': moveList(type, l, parseInt(d.dir, 10)); break;
+                case 'edit-list': reqAdminEditList(type, l); break;
+                case 'del-list': reqAdminDel(() => delList(type, l)); break;
+                case 'add-card': reqAdminAddCard(type, l); break;
+                case 'add-list': crearNuevaLista(type); break;
+                case 'preview-news': {
+                    const noticia = db.news[parseInt(d.idx, 10)];
+                    if(noticia) openPreview(noticia.title, noticia.content, '');
+                    break;
+                }
+                case 'edit-news': reqAdminEditNews(parseInt(d.idx, 10)); break;
+                case 'del-news': reqAdminDel(() => delNews(parseInt(d.idx, 10))); break;
+                case 'add-news': reqAdminAddNews(); break;
+                case 'resp-sub': filterRespSub(d.sc); break;
+                case 'news-cat': filterNews(d.sc); break;
+                case 'add-resp': reqAdminAddResp(parseInt(d.l, 10)); break;
+                case 'remove-r5': removeR5Node(parseInt(d.idx, 10)); break;
+            }
+        }
+
+        function crearNuevaLista(type) {
+            openForm("Nueva Lista", [{ id: 'l_name', p: 'Nombre' }], (v) => {
+                db[type].push({ id: Date.now(), title: v[0], cards: [] });
+                markUnsaved(vistaDeTipo(type));
             });
         }
 
-        function renderAll() {
-            if(!db) return;
-            renderGeneric('clipboard', 'view-clip'); renderGeneric('passwords', 'view-pass'); renderResp(); renderNews(); filterUniversal();
+        function accionesTarjeta(type, lIdx, cIdx, total) {
+            const acciones = crear('div', 'actions');
+            if(isAdmin) {
+                if(cIdx > 0) acciones.appendChild(crearBoton('⬆️', 'Subir', { action: 'move-card', type, l: lIdx, c: cIdx, dir: -1 }));
+                if(cIdx < total - 1) acciones.appendChild(crearBoton('⬇️', 'Bajar', { action: 'move-card', type, l: lIdx, c: cIdx, dir: 1 }));
+            }
+            acciones.appendChild(crearBoton('👁️', 'Ver completo', { action: 'preview-card', type, l: lIdx, c: cIdx }));
+            if(isAdmin) {
+                acciones.appendChild(crearBoton('✏️', 'Editar', { action: 'edit-card', type, l: lIdx, c: cIdx }));
+                const borrar = crearBoton('🗑️', 'Eliminar', { action: 'del-card', type, l: lIdx, c: cIdx });
+                borrar.classList.add('peligro');
+                acciones.appendChild(borrar);
+            }
+            return acciones;
         }
 
-        function getMoveBtnsHtml(type, lIdx, cIdx, arrLength) {
-            if(!isAdmin) return '';
-            let up = cIdx > 0 ? `<button class="mini-btn move-btn" title="Subir" onclick="event.stopPropagation(); moveCard('${type}',${lIdx},${cIdx},-1)">⬆️</button>` : '';
-            let down = cIdx < arrLength - 1 ? `<button class="mini-btn move-btn" title="Bajar" onclick="event.stopPropagation(); moveCard('${type}',${lIdx},${cIdx},1)">⬇️</button>` : '';
-            return up + down;
+        function tarjetaClip(c, lIdx, cIdx, total) {
+            const card = crear('div', 'card');
+            card.dataset.action = 'copy';
+            card.dataset.type = 'clipboard';
+            card.dataset.l = lIdx;
+            card.dataset.c = cIdx;
+            card.dataset.buscar = normalizar(`${c.label} ${c.content}`);
+            card.appendChild(crear('div', 'card-label', c.label));
+            card.appendChild(crear('div', 'card-val', c.content));
+            card.appendChild(accionesTarjeta('clipboard', lIdx, cIdx, total));
+            return card;
+        }
+
+        function tarjetaPass(c, lIdx, cIdx, total) {
+            const card = crear('div', 'card pass-card');
+            card.dataset.buscar = normalizar(`${c.label} ${c.user} ${c.pass}`);
+            card.appendChild(crear('div', 'card-label', c.label));
+
+            const filaUser = crear('div', 'cred-row');
+            const spanUser = crear('span');
+            spanUser.appendChild(document.createTextNode('👤 '));
+            const usuario = crear('strong', null, c.user);
+            usuario.style.color = 'var(--text-main)';
+            spanUser.appendChild(usuario);
+            filaUser.appendChild(spanUser);
+            filaUser.appendChild(crearBoton('Copiar', 'Copiar usuario', { action: 'copy-user', type: 'passwords', l: lIdx, c: cIdx }));
+            card.appendChild(filaUser);
+
+            const filaPass = crear('div', 'cred-row');
+            const spanPass = crear('span', 'blur');
+            spanPass.dataset.action = 'reveal';
+            spanPass.title = 'Toca para mostrar u ocultar';
+            spanPass.appendChild(document.createTextNode('🔑 '));
+            spanPass.appendChild(crear('strong', null, c.pass));
+            filaPass.appendChild(spanPass);
+            filaPass.appendChild(crearBoton('Copiar', 'Copiar contraseña', { action: 'copy-pass', type: 'passwords', l: lIdx, c: cIdx }));
+            card.appendChild(filaPass);
+
+            card.appendChild(accionesTarjeta('passwords', lIdx, cIdx, total));
+            return card;
         }
 
         function renderGeneric(type, divId) {
-            const div = document.getElementById(divId); div.innerHTML='';
+            const div = $id(divId);
+            if(!div) return;
+
+            const fragmento = document.createDocumentFragment();
+
             db[type].forEach((list, lIdx) => {
-                const box = document.createElement('div'); box.className='list-box';
-                let moveListBtns = isAdmin ? (lIdx > 0 ? `<button class="mini-btn move-btn" onclick="moveList('${type}',${lIdx},-1)">⬆️</button>` : '') + (lIdx < db[type].length - 1 ? `<button class="mini-btn move-btn" onclick="moveList('${type}',${lIdx},1)">⬇️</button>` : '') : '';
-                let adminBtns = isAdmin ? `<div style="display:flex; gap:5px">${moveListBtns}<button class="mini-btn" title="Editar Lista" onclick="reqAdminEditList('${type}',${lIdx})">✏️</button><button class="mini-btn" style="color:var(--danger);" onclick="reqAdminDel(()=>delList('${type}',${lIdx}))">🗑️</button></div>` : '';
-                box.innerHTML = `<div class="list-head"><span>${list.title}</span>${adminBtns}</div><div class="grid"></div>`;
-                const grid = box.querySelector('.grid');
+                const box = crear('div', 'list-box');
+                box.dataset.buscar = normalizar(list.title);
+
+                const head = crear('div', 'list-head');
+                head.appendChild(crear('span', null, list.title));
+
+                if(isAdmin) {
+                    const tools = crear('div', 'list-tools');
+                    if(lIdx > 0) tools.appendChild(crearBoton('⬆️', 'Subir lista', { action: 'move-list', type, l: lIdx, dir: -1 }));
+                    if(lIdx < db[type].length - 1) tools.appendChild(crearBoton('⬇️', 'Bajar lista', { action: 'move-list', type, l: lIdx, dir: 1 }));
+                    tools.appendChild(crearBoton('✏️', 'Editar lista', { action: 'edit-list', type, l: lIdx }));
+                    const borrarLista = crearBoton('🗑️', 'Eliminar lista', { action: 'del-list', type, l: lIdx });
+                    borrarLista.classList.add('peligro');
+                    tools.appendChild(borrarLista);
+                    head.appendChild(tools);
+                }
+                box.appendChild(head);
+
+                const grid = crear('div', 'grid');
                 list.cards.forEach((c, cIdx) => {
-                    const d = document.createElement('div');
-                    let actHtml = `<div class="actions">${getMoveBtnsHtml(type, lIdx, cIdx, list.cards.length)}<button class="mini-btn" title="Ver completo" onclick="event.stopPropagation(); openPreview('${c.label}', \`${type==='passwords' ? `Usuario: ${c.user}\nClave: ${c.pass}` : c.content}\`, \`${type==='passwords'? c.pass : c.content}\`)">👁️</button>${isAdmin ? `<button class="mini-btn" onclick="event.stopPropagation(); reqAdminEditCard('${type}',${lIdx},${cIdx})">✏️</button><button class="mini-btn" style="color:var(--danger);" onclick="event.stopPropagation(); reqAdminDel(()=>delCard('${type}',${lIdx},${cIdx}))">🗑️</button>` : ''}</div>`;
-                    if(type==='clipboard') { d.className='card'; d.onclick=()=>copy(c.content, {etiqueta: c.label, origen: 'link'}); d.innerHTML=`<div class="card-label">${c.label}</div><div class="card-val">${c.content}</div>${actHtml}`; } 
-                    else { d.className='card pass-card'; d.innerHTML=`<div class="card-label">${c.label}</div><div class="cred-row"><span>👤 <strong style="color:var(--text-main)">${c.user}</strong></span><button class="mini-btn" style="width:auto; padding:2px 8px" onclick="event.stopPropagation(); copy('${c.user}')">Copiar</button></div><div class="cred-row"><span class="blur">🔑 <strong>${c.pass}</strong></span><button class="mini-btn" style="width:auto; padding:2px 8px" onclick="event.stopPropagation(); copy('${c.pass}')">Copiar</button></div>${actHtml}`; }
-                    grid.appendChild(d);
+                    grid.appendChild(type === 'clipboard'
+                        ? tarjetaClip(c, lIdx, cIdx, list.cards.length)
+                        : tarjetaPass(c, lIdx, cIdx, list.cards.length));
                 });
-                if(isAdmin) { const add = document.createElement('div'); add.className='card btn-add'; add.innerHTML='<span>+ Tarjeta</span>'; add.onclick=()=> reqAdminAddCard(type, lIdx); grid.appendChild(add); }
-                div.appendChild(box);
+
+                if(isAdmin) {
+                    const agregar = crear('button', 'card btn-add', '+ Tarjeta');
+                    agregar.type = 'button';
+                    agregar.dataset.action = 'add-card';
+                    agregar.dataset.type = type;
+                    agregar.dataset.l = lIdx;
+                    grid.appendChild(agregar);
+                }
+
+                box.appendChild(grid);
+                fragmento.appendChild(box);
             });
-            if(isAdmin) { const btn = document.createElement('button'); btn.className='btn-large'; btn.style.background='var(--bg-input)'; btn.style.color='var(--text-main)'; btn.innerHTML='+ Crear Lista'; btn.onclick=()=> openForm("Nueva Lista", [{id:'l_name', p:'Nombre'}], (v)=>{ db[type].push({id:Date.now(), title:v[0], cards:[]}); markUnsaved(); }); div.appendChild(btn); }
+
+            if(db[type].length === 0) {
+                fragmento.appendChild(crear('div', 'vacio', type === 'clipboard' ? 'No hay listas de links todavía.' : 'No hay listas de contraseñas todavía.'));
+            }
+
+            if(isAdmin) {
+                const nueva = crear('button', 'btn-large btn-crear-lista', '+ Crear Lista');
+                nueva.type = 'button';
+                nueva.dataset.action = 'add-list';
+                nueva.dataset.type = type;
+                fragmento.appendChild(nueva);
+            }
+
+            div.replaceChildren(fragmento);
+        }
+
+        function tarjetaResp(c, lIdx, cIdx, total) {
+            const card = crear('div', `card resp-card color-${c.color || 'neutro'}`);
+            card.dataset.action = 'copy';
+            card.dataset.type = 'responses';
+            card.dataset.l = lIdx;
+            card.dataset.c = cIdx;
+            card.dataset.subcat = c.subcat || '';
+            card.dataset.buscar = normalizar(`${c.label} ${c.subcat || ''} ${c.content}`);
+
+            if(c.subcat && c.subcat !== 'General') card.appendChild(crear('span', 'resp-subcat', `📁 ${c.subcat}`));
+            card.appendChild(crear('div', 'card-label', c.label));
+            card.appendChild(crear('div', 'card-val', c.content));
+            card.appendChild(accionesTarjeta('responses', lIdx, cIdx, total));
+            return card;
         }
 
         function renderResp() {
-            const grid = document.getElementById('resp-grid'); grid.innerHTML = '';
+            const grid = $id('resp-grid');
+            if(!grid) return;
+
             const targetList = db.responses.find(r => r.title === currentRespFilterMain);
-            let subcats = new Set(['Todas']);
+            const lIdx = targetList ? db.responses.indexOf(targetList) : -1;
+            const subcats = new Set(['Todas']);
+            const fragmento = document.createDocumentFragment();
 
             if(targetList) {
-                const lIdx = db.responses.indexOf(targetList);
                 targetList.cards.forEach((c, cIdx) => {
                     if(c.subcat) subcats.add(c.subcat);
-                    if(currentRespFilterSub !== 'Todas' && c.subcat !== currentRespFilterSub) return;
-
-                    const d = document.createElement('div'); d.className = `card resp-card color-${c.color || 'neutro'}`; d.onclick=()=>copy(c.content, {etiqueta: c.label, origen: 'respuesta'});
-                    let actHtml = `<div class="actions">${getMoveBtnsHtml('responses', lIdx, cIdx, targetList.cards.length)}<button class="mini-btn" onclick="event.stopPropagation(); openPreview('${c.label}', \`${c.content}\`, \`${c.content}\`)">👁️</button>${isAdmin ? `<button class="mini-btn" onclick="event.stopPropagation(); reqAdminEditCardResp(${lIdx},${cIdx})">✏️</button><button class="mini-btn" style="color:var(--danger);" onclick="event.stopPropagation(); reqAdminDel(()=>delCardResp(${lIdx},${cIdx}))">🗑️</button>` : ''}</div>`;
-                    let subBadge = c.subcat && c.subcat !== 'General' ? `<span style="font-size:0.7rem; color:var(--text-sec); display:block; margin-bottom:2px">📁 ${c.subcat}</span>` : '';
-                    d.innerHTML = `${subBadge}<div class="card-label">${c.label}</div><div class="card-val">${c.content}</div>${actHtml}`; grid.appendChild(d);
+                    fragmento.appendChild(tarjetaResp(c, lIdx, cIdx, targetList.cards.length));
                 });
-            } else grid.innerHTML = '<div style="color:var(--text-sec); text-align:center; padding:20px; width:100%">No hay respuestas aquí.</div>';
-            
-            const subFilterBox = document.getElementById('resp-filters-sub'); subFilterBox.innerHTML = '';
+            }
+
+            if(!targetList || targetList.cards.length === 0) {
+                fragmento.appendChild(crear('div', 'vacio', targetList ? 'Aún no hay respuestas en esta categoría.' : 'No hay respuestas aquí.'));
+            }
+            grid.replaceChildren(fragmento);
+
+            const subFilterBox = $id('resp-filters-sub');
+            subFilterBox.replaceChildren();
             if(subcats.size > 1) {
                 subcats.forEach(sc => {
-                    const p = document.createElement('div'); p.className = `pill pill-sec ${sc === currentRespFilterSub ? 'active' : ''}`;
-                    p.innerText = sc; p.onclick = () => filterRespSub(sc); subFilterBox.appendChild(p);
+                    const p = crear('button', 'pill pill-sec' + (sc === currentRespFilterSub ? ' active' : ''), sc);
+                    p.type = 'button';
+                    p.dataset.action = 'resp-sub';
+                    p.dataset.sc = sc;
+                    subFilterBox.appendChild(p);
                 });
             }
-            document.querySelectorAll('#resp-filters-main .pill').forEach(p => p.classList.toggle('active', p.innerText.includes(currentRespFilterMain)));
-            const tools = document.getElementById('resp-admin-tools'); tools.innerHTML = '';
-            if(isAdmin && targetList) tools.innerHTML = `<button class="btn-large" style="background:var(--bg-input); color:var(--text-main)" onclick="reqAdminAddResp(${db.responses.indexOf(targetList)})">+ Agregar a ${currentRespFilterMain}</button>`;
+
+            document.querySelectorAll('#resp-filters-main .pill').forEach(p => p.classList.toggle('active', p.textContent.includes(currentRespFilterMain)));
+
+            const tools = $id('resp-admin-tools');
+            tools.replaceChildren();
+            if(isAdmin && targetList) {
+                const btn = crear('button', 'btn-large', `+ Agregar a ${currentRespFilterMain}`);
+                btn.type = 'button';
+                btn.dataset.action = 'add-resp';
+                btn.dataset.l = lIdx;
+                tools.appendChild(btn);
+            }
         }
-        function filterRespMain(f) { currentRespFilterMain = f; currentRespFilterSub = 'Todas'; document.getElementById('search-bar').value=''; renderResp(); }
-        function filterRespSub(f) { currentRespFilterSub = f; renderResp(); }
+
+        function actualizarPillsResp() {
+            document.querySelectorAll('#resp-filters-sub .pill').forEach(p => p.classList.toggle('active', p.textContent === currentRespFilterSub));
+            document.querySelectorAll('#resp-filters-main .pill').forEach(p => p.classList.toggle('active', p.textContent.includes(currentRespFilterMain)));
+        }
+
+        function filterRespMain(f) { currentRespFilterMain = f; currentRespFilterSub = 'Todas'; limpiarBusqueda(); renderResp(); aplicarFiltros(); }
+        function filterRespSub(f) { currentRespFilterSub = f; actualizarPillsResp(); aplicarFiltros(); }
+
+        function tarjetaNews(n, idx, total) {
+            const card = crear('div', 'card news-card');
+            card.dataset.cat = n.cat || '';
+            card.dataset.buscar = normalizar(`${n.title} ${n.cat || ''} ${n.content} ${n.date || ''}`);
+
+            if(n.cat) card.appendChild(crear('div', 'news-cat', n.cat));
+            card.appendChild(crear('div', 'news-date', `📅 ${n.date}`));
+            card.appendChild(crear('div', 'news-title', n.title));
+            card.appendChild(crear('div', 'card-val', n.content));
+
+            const acciones = crear('div', 'actions');
+            if(isAdmin) {
+                if(idx > 0) acciones.appendChild(crearBoton('⬆️', 'Subir', { action: 'move-list', type: 'news', l: idx, dir: -1 }));
+                if(idx < total - 1) acciones.appendChild(crearBoton('⬇️', 'Bajar', { action: 'move-list', type: 'news', l: idx, dir: 1 }));
+            }
+            acciones.appendChild(crearBoton('👁️', 'Ver completo', { action: 'preview-news', idx }));
+            if(isAdmin) {
+                acciones.appendChild(crearBoton('✏️', 'Editar', { action: 'edit-news', idx }));
+                const borrar = crearBoton('🗑️', 'Eliminar', { action: 'del-news', idx });
+                borrar.classList.add('peligro');
+                acciones.appendChild(borrar);
+            }
+            card.appendChild(acciones);
+            return card;
+        }
 
         function renderNews() {
-            const grid = document.getElementById('news-grid'); grid.innerHTML = ''; let cats = new Set(['Todas']);
+            const grid = $id('news-grid');
+            if(!grid) return;
+
+            const cats = new Set(['Todas']);
+            const fragmento = document.createDocumentFragment();
+
             db.news.forEach((n, idx) => {
                 if(n.cat) cats.add(n.cat);
-                if(currentNewsFilter !== 'Todas' && n.cat !== currentNewsFilter) return;
-
-                const d = document.createElement('div'); d.className = 'card news-card';
-                let actHtml = `<div class="actions">${isAdmin && idx > 0 ? `<button class="mini-btn move-btn" onclick="moveList('news',${idx},-1)">⬆️</button>` : ''}${isAdmin && idx < db.news.length - 1 ? `<button class="mini-btn move-btn" onclick="moveList('news',${idx},1)">⬇️</button>` : ''}<button class="mini-btn" onclick="openPreview('${n.title}', \`${n.content}\`, '')">👁️</button>${isAdmin ? `<button class="mini-btn" onclick="reqAdminEditNews(${idx})">✏️</button><button class="mini-btn" style="color:var(--danger);" onclick="reqAdminDel(()=>delNews(${idx}))">🗑️</button>` : ''}</div>`;
-                let catBadge = n.cat ? `<div class="news-cat">${n.cat}</div>` : '';
-                d.innerHTML = `${catBadge}<div class="news-date">📅 ${n.date}</div><div class="news-title">${n.title}</div><div class="card-val">${n.content}</div>${actHtml}`; grid.appendChild(d);
+                fragmento.appendChild(tarjetaNews(n, idx, db.news.length));
             });
 
-            const subFilterBox = document.getElementById('news-filters'); subFilterBox.innerHTML = '';
+            if(db.news.length === 0) fragmento.appendChild(crear('div', 'vacio', 'No hay comunicados.'));
+            grid.replaceChildren(fragmento);
+
+            const subFilterBox = $id('news-filters');
+            subFilterBox.replaceChildren();
             if(cats.size > 1) {
                 cats.forEach(sc => {
-                    const p = document.createElement('div'); p.className = `pill pill-sec ${sc === currentNewsFilter ? 'active' : ''}`;
-                    p.innerText = sc; p.onclick = () => filterNews(sc); subFilterBox.appendChild(p);
+                    const p = crear('button', 'pill pill-sec' + (sc === currentNewsFilter ? ' active' : ''), sc);
+                    p.type = 'button';
+                    p.dataset.action = 'news-cat';
+                    p.dataset.sc = sc;
+                    subFilterBox.appendChild(p);
                 });
             }
 
-            if(grid.innerHTML === '') grid.innerHTML = '<div style="color:var(--text-sec); text-align:center; padding:20px; width:100%">No hay comunicados.</div>';
-            const tools = document.getElementById('news-admin-tools'); tools.innerHTML = '';
-            if(isAdmin) tools.innerHTML = `<button class="btn-large" style="background:var(--bg-input); color:var(--text-main)" onclick="reqAdminAddNews()">+ Redactar Comunicado</button>`;
+            const tools = $id('news-admin-tools');
+            tools.replaceChildren();
+            if(isAdmin) {
+                const btn = crear('button', 'btn-large', '+ Redactar Comunicado');
+                btn.type = 'button';
+                btn.dataset.action = 'add-news';
+                tools.appendChild(btn);
+            }
         }
-        function filterNews(f) { currentNewsFilter = f; document.getElementById('search-bar').value=''; renderNews(); }
+
+        function actualizarPillsNews() {
+            document.querySelectorAll('#news-filters .pill').forEach(p => p.classList.toggle('active', p.textContent === currentNewsFilter));
+        }
+
+        function filterNews(f) { currentNewsFilter = f; actualizarPillsNews(); limpiarBusqueda(); aplicarFiltros(); }
 
         function moveCard(type, lIdx, cIdx, dir) {
             let arr = db[type][lIdx].cards;
             if (dir === -1 && cIdx > 0) [arr[cIdx-1], arr[cIdx]] = [arr[cIdx], arr[cIdx-1]];
             else if (dir === 1 && cIdx < arr.length - 1) [arr[cIdx+1], arr[cIdx]] = [arr[cIdx], arr[cIdx+1]];
-            markUnsaved();
+            markUnsaved(vistaDeTipo(type));
         }
         function moveList(type, idx, dir) {
             let arr = db[type];
             if (dir === -1 && idx > 0) [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
             else if (dir === 1 && idx < arr.length - 1) [arr[idx+1], arr[idx]] = [arr[idx], arr[idx+1]];
-            markUnsaved();
+            markUnsaved(vistaDeTipo(type));
         }
 
         // --- 5. HERRAMIENTAS / OCR / CALC / REPORTE 5 ---
@@ -518,6 +1065,7 @@
                 document.getElementById(`pill-tool-${m}`).classList.toggle('active', mode === m);
                 document.getElementById(`tool-box-${m}`).classList.toggle('hidden', mode !== m);
             });
+            if(mode === 'ocr') loadOCR().catch(() => {});
         }
 
         function calcDivisas() {
@@ -552,6 +1100,22 @@
             screen.value = calcVal || "0";
         }
 
+        // OCR bajo demanda: solo se descarga cuando de verdad se usa.
+        let ocrLoader = null;
+        function loadOCR() {
+            if(window.Tesseract) return Promise.resolve(window.Tesseract);
+            if(ocrLoader) return ocrLoader;
+            ocrLoader = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+                script.async = true;
+                script.onload = () => window.Tesseract ? resolve(window.Tesseract) : reject(new Error('OCR no disponible'));
+                script.onerror = () => { ocrLoader = null; reject(new Error('No se pudo cargar el OCR (sin conexión)')); };
+                document.head.appendChild(script);
+            });
+            return ocrLoader;
+        }
+
         async function processOCR(file) {
             if(!file) return;
             const reader = new FileReader();
@@ -561,14 +1125,15 @@
                 img.src = e.target.result; img.style.display = 'inline-block'; instructions.style.display = 'none';
                 const status = document.getElementById('ocr-status'); const bar = document.getElementById('ocr-bar');
                 const progress = document.getElementById('ocr-progress'); const resultBox = document.getElementById('ocr-result');
-                bar.style.display = 'block'; resultBox.value = ''; status.innerHTML = "⏳ Iniciando motor OCR..."; status.style.color = "var(--primary)";
+                bar.style.display = 'block'; bar.classList.add('activo'); resultBox.value = ''; status.innerHTML = "⏳ Iniciando motor OCR..."; status.style.color = "var(--primary)";
                 try {
+                    await loadOCR();
                     const result = await Tesseract.recognize(e.target.result, 'spa', {
                         logger: m => { if(m.status === 'recognizing text') { status.innerHTML = `🔍 Escaneando imagen: ${Math.round(m.progress * 100)}%`; progress.style.width = `${m.progress * 100}%`; } else status.innerHTML = `⏳ Preparando... (${m.status})`; }
                     });
                     resultBox.value = result.data.text; status.innerHTML = "✅ Escaneo completado"; status.style.color = "var(--success)";
-                } catch(err) { status.innerHTML = "❌ Error al leer la imagen"; status.style.color = "var(--danger)"; } 
-                finally { setTimeout(() => { bar.style.display = 'none'; progress.style.width = '0%'; }, 1500); }
+                } catch(err) { status.innerHTML = `❌ ${err.message || 'Error al leer la imagen'}`; status.style.color = "var(--danger)"; } 
+                finally { setTimeout(() => { bar.style.display = 'none'; bar.classList.remove('activo'); progress.style.width = '0%'; }, 1500); }
             };
             reader.readAsDataURL(file);
         }
@@ -648,7 +1213,7 @@
             if(document.getElementById('r5-node-select').value !== '') {
                 const now = new Date(); let h = now.getHours(); let m = now.getMinutes(); let ampm = h >= 12 ? 'PM' : 'AM';
                 h = h % 12 || 12; m = m < 10 ? '0'+m : m;
-                document.getElementById('r5-time-input').value = `${h < 10 ? '0'+h : h}:${m}${ampm}`;
+                document.getElementById('r5-time-input').value = `${h < 10 ? '0'+h : h}:${m} ${ampm}`;
             }
         }
         function addR5Node() {
@@ -660,13 +1225,18 @@
             renderR5Nodes(); updateLivePreview();
         }
         function renderR5Nodes() {
-            const box = document.getElementById('r5-nodes-list'); box.innerHTML = '';
+            const box = document.getElementById('r5-nodes-list');
+            const fragmento = document.createDocumentFragment();
             r5Nodes.forEach((n, idx) => {
-                const d = document.createElement('div');
-                d.style = "display:flex; justify-content:space-between; align-items:center; background:var(--bg-input); padding:8px 12px; border-radius:8px; font-size:0.9rem; font-weight:bold;";
-                d.innerHTML = `<span>${n.name} ${r5Status === 'ACTIVO' && n.time ? `- ${n.time}` : ''}</span> <button class="mini-btn" style="color:var(--danger)" onclick="removeR5Node(${idx})">X</button>`;
-                box.appendChild(d);
+                const d = crear('div', 'r5-node');
+                const texto = r5Status === 'ACTIVO' && n.time ? `${n.name} - ${n.time}` : n.name;
+                d.appendChild(crear('span', null, texto));
+                const quitar = crearBoton('X', 'Quitar nodo', { action: 'remove-r5', idx });
+                quitar.classList.add('peligro');
+                d.appendChild(quitar);
+                fragmento.appendChild(d);
             });
+            box.replaceChildren(fragmento);
         }
         function removeR5Node(idx) { r5Nodes.splice(idx, 1); renderR5Nodes(); updateLivePreview(); }
         function setR5Status(s) {
@@ -680,8 +1250,7 @@
         }
 
 
-        function updateLivePreview() {
-            saveRepTimes(); localStorage.setItem('report_operator', document.getElementById('rep-operador').value);
+        function renderLivePreview() {
             const op = document.getElementById('rep-operador').value || "[Tu Nombre]";
             let htmlText = ""; let plainText = "";
 
@@ -754,10 +1323,22 @@
             plainText = `Revisado por: ${rev}\nFecha de Reporte: ${fecha}\nHora de Reporte: ${timeStr}\nInversores A: ${invA}\nInversores B: ${invB}\nCANALES: ${can}`;
             }
 
-            document.getElementById('live-preview-box').innerHTML = htmlText; finalReportAsterisks = plainText; 
+            document.getElementById('live-preview-box').innerHTML = htmlSeguro(htmlText); finalReportAsterisks = plainText; 
         }
 
-        function copyGeneratedReport() { if(finalReportAsterisks) copy(finalReportAsterisks, {etiqueta: 'Reporte generado', origen: 'reporte'}); }
+        // La vista previa se actualiza como máximo cada 120 ms; el guardado, cada 800 ms.
+        const guardarEstadoReporte = debounce(() => {
+            saveRepTimes();
+            const operador = $id('rep-operador');
+            if(operador) localStorage.setItem('report_operator', operador.value);
+        }, 800);
+
+        const updateLivePreview = debounce(() => {
+            renderLivePreview();
+            guardarEstadoReporte();
+        }, 120);
+
+        function copyGeneratedReport() { renderLivePreview(); if(finalReportAsterisks) copy(finalReportAsterisks, {etiqueta: 'Reporte generado', origen: 'reporte'}); }
 
         function updateTextTools() { const text = document.getElementById('tool-text').value; document.getElementById('char-count').innerText = text.length; document.getElementById('word-count').innerText = text.trim() === '' ? 0 : text.trim().split(/\s+/).length; }
         function formatText(type) { const el = document.getElementById('tool-text'); if(type === 'UPPER') el.value = el.value.toUpperCase(); if(type === 'LOWER') el.value = el.value.toLowerCase(); if(type === 'TITLE') el.value = el.value.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase()); updateTextTools(); }
@@ -774,7 +1355,7 @@
         function copyFromPreview() { if(textToCopyFromPreview) copy(textToCopyFromPreview, {etiqueta: previewTitleActual || 'Vista previa', origen: 'preview'}); closeModal('preview-modal'); }
 
         function openForm(title, fields, onSubmit) {
-            document.getElementById('form-title').innerText = title; const container = document.getElementById('form-inputs'); container.innerHTML = '';
+            document.getElementById('form-title').innerText = title; const container = document.getElementById('form-inputs'); container.replaceChildren();
             fields.forEach(f => {
                 let el;
                 if(f.type === 'select') {
@@ -798,7 +1379,8 @@
             });
             formCallback = () => {
                 const values = fields.map(f => document.getElementById(f.id).value.trim());
-                if(values.some(v => !v && f.required !== false)) return alert("Completa los campos principales");
+                const faltan = fields.some((f, i) => f.required !== false && !values[i]);
+                if(faltan) return alert("Completa los campos principales");
                 onSubmit(values); closeModal('form-modal');
             };
             document.getElementById('form-submit').onclick = formCallback; openModal('form-modal');
@@ -825,7 +1407,7 @@
         // CRUD AHORA SOLO LOCAL (Llama a markUnsaved)
         function reqAdminAddCard(type, lIdx) {
             let fields = type==='clipboard' ? [{id:'f_title', p:'Título'}, {id:'f_val', p:'IP/Link', type:'textarea'}] : [{id:'f_title', p:'Equipo'}, {id:'f_user', p:'Usuario'}, {id:'f_pass', p:'Contraseña'}];
-            openForm("Nueva Tarjeta", fields, (v) => { if(type==='clipboard') db[type][lIdx].cards.push({id:Date.now(), label:v[0], content:v[1]}); else db[type][lIdx].cards.push({id:Date.now(), label:v[0], user:v[1], pass:v[2]}); markUnsaved(); });
+            openForm("Nueva Tarjeta", fields, (v) => { if(type==='clipboard') db[type][lIdx].cards.push({id:Date.now(), label:v[0], content:v[1]}); else db[type][lIdx].cards.push({id:Date.now(), label:v[0], user:v[1], pass:v[2]}); markUnsaved(vistaDeTipo(type)); });
         }
         
         function reqAdminAddResp(lIdx) { 
@@ -835,7 +1417,7 @@
                 {id:'r_sc', l:'Subcategoría (Opcional)', type:'datalist', options: existingCats, p:'Ej: Pagos', required: false},
                 {id:'r_col', l:'Color', type:'select', options: [{v:'neutro', l:'⚪ Neutro'}, {v:'info', l:'🔵 Información'}, {v:'exito', l:'🟢 Éxito / Pagos'}, {v:'aviso', l:'🟡 Advertencia'}, {v:'urgente', l:'🔴 Urgente'}]},
                 {id:'r_c', l:'Mensaje a copiar', type:'textarea'}
-            ], (v)=>{ db.responses[lIdx].cards.push({id:Date.now(), label:v[0], subcat:v[1], color:v[2], content:v[3]}); markUnsaved(); }); 
+            ], (v)=>{ db.responses[lIdx].cards.push({id:Date.now(), label:v[0], subcat:v[1], color:v[2], content:v[3]}); markUnsaved('resp'); }); 
         }
 
         function reqAdminAddNews() { 
@@ -844,15 +1426,15 @@
                 {id:'n_t', l:'Título', p:'Ej: Mantenimiento'}, 
                 {id:'n_c', l:'Categoría (Opcional)', type:'datalist', options: existingCats, p:'Ej: Administrativo', required: false},
                 {id:'n_msg', l:'Mensaje', type:'textarea'}
-            ], (v)=>{ db.news.unshift({id:Date.now(), date: new Date().toLocaleDateString('es-VE'), title:v[0], cat:v[1], content:v[2]}); markUnsaved(); }); 
+            ], (v)=>{ db.news.unshift({id:Date.now(), date: new Date().toLocaleDateString('es-VE'), title:v[0], cat:v[1], content:v[2]}); markUnsaved('news'); }); 
         }
 
-        function reqAdminEditList(type, lIdx) { openForm("Editar Lista", [{id:'l_name', p:'Nombre', value: db[type][lIdx].title}], (v)=>{ db[type][lIdx].title = v[0]; markUnsaved(); }); }
+        function reqAdminEditList(type, lIdx) { openForm("Editar Lista", [{id:'l_name', p:'Nombre', value: db[type][lIdx].title}], (v)=>{ db[type][lIdx].title = v[0]; markUnsaved(vistaDeTipo(type)); }); }
         
         function reqAdminEditCard(type, lIdx, cIdx) {
             let item = db[type][lIdx].cards[cIdx];
             let fields = type==='clipboard' ? [{id:'f_title', p:'Título', value: item.label}, {id:'f_val', p:'Contenido', type:'textarea', value: item.content}] : [{id:'f_title', p:'Equipo', value: item.label}, {id:'f_user', p:'Usuario', value: item.user}, {id:'f_pass', p:'Contraseña', value: item.pass}];
-            openForm("Editar Tarjeta", fields, (v) => { item.label = v[0]; if(type==='clipboard') item.content = v[1]; else { item.user = v[1]; item.pass = v[2]; } markUnsaved(); });
+            openForm("Editar Tarjeta", fields, (v) => { item.label = v[0]; if(type==='clipboard') item.content = v[1]; else { item.user = v[1]; item.pass = v[2]; } markUnsaved(vistaDeTipo(type)); });
         }
         
         function reqAdminEditCardResp(lIdx, cIdx) { 
@@ -863,7 +1445,7 @@
                 {id:'r_sc', l:'Subcategoría', type:'datalist', options: existingCats, value: item.subcat || '', required: false},
                 {id:'r_col', l:'Color', type:'select', value: item.color || 'neutro', options: [{v:'neutro', l:'⚪ Neutro'}, {v:'info', l:'🔵 Información'}, {v:'exito', l:'🟢 Éxito'}, {v:'aviso', l:'🟡 Advertencia'}, {v:'urgente', l:'🔴 Urgente'}]},
                 {id:'r_c', l:'Mensaje', type:'textarea', value: item.content}
-            ], (v)=>{ item.label = v[0]; item.subcat = v[1]; item.color = v[2]; item.content = v[3]; markUnsaved(); }); 
+            ], (v)=>{ item.label = v[0]; item.subcat = v[1]; item.color = v[2]; item.content = v[3]; markUnsaved('resp'); }); 
         }
 
         function reqAdminEditNews(idx) { 
@@ -873,13 +1455,13 @@
                 {id:'n_t', l:'Título', value: item.title}, 
                 {id:'n_c', l:'Categoría', type:'datalist', options: existingCats, value: item.cat || '', required: false},
                 {id:'n_msg', l:'Cuerpo', type:'textarea', value: item.content}
-            ], (v)=>{ item.title = v[0]; item.cat = v[1]; item.content = v[2]; markUnsaved(); }); 
+            ], (v)=>{ item.title = v[0]; item.cat = v[1]; item.content = v[2]; markUnsaved('news'); }); 
         }
 
-        function delCard(type, l, c) { db[type][l].cards.splice(c,1); markUnsaved(); } 
-        function delList(type, l) { db[type].splice(l,1); markUnsaved(); } 
-        function delCardResp(lIdx, cIdx) { db.responses[lIdx].cards.splice(cIdx,1); markUnsaved(); } 
-        function delNews(idx) { db.news.splice(idx,1); markUnsaved(); }
+        function delCard(type, l, c) { db[type][l].cards.splice(c,1); markUnsaved(vistaDeTipo(type)); } 
+        function delList(type, l) { db[type].splice(l,1); markUnsaved(vistaDeTipo(type)); } 
+        function delCardResp(lIdx, cIdx) { db.responses[lIdx].cards.splice(cIdx,1); markUnsaved('resp'); } 
+        function delNews(idx) { db.news.splice(idx,1); markUnsaved('news'); }
 
         // UTILS
         async function copy(x, meta) { 
@@ -889,7 +1471,15 @@
             try { await navigator.clipboard.writeText(x); } 
             catch { const t=document.createElement('textarea'); t.value=x; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); } 
         }
-        function showToastMsg(msg) { const t=document.getElementById('toast'); t.innerText = msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 2500); }
+        let toastTimer = null;
+        function showToastMsg(msg) {
+            const t = document.getElementById('toast');
+            if(!t) return;
+            t.innerText = msg;
+            t.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+        }
         function toggleTheme() { document.body.classList.toggle('dark-mode'); localStorage.setItem('theme', document.body.classList.contains('dark-mode')?'dark':'light'); }
         
         // COMPROBADOR DE HORA Y ALARMA NATIVA
@@ -899,6 +1489,7 @@
             
             if((exit - now)/1000/60 <= 60 && (exit - now) > 0) { 
                 alarmTriggered = true; 
+                if(checkTimer) { clearInterval(checkTimer); checkTimer = null; }
                 openModal('alarm-modal'); 
                 
                 try { alarmAudio.play(); } catch(e) { console.log("Audio bloqueado por el navegador"); }
@@ -915,121 +1506,142 @@
         
         function stopAlarm() { closeModal('alarm-modal'); alarmAudio.pause(); alarmAudio.currentTime = 0; }
 
-        // Contador clics // 
-             // --- 6. CONTADOR FLOTANTE (CON MEMORIA DE VALOR Y POSICIÓN) ---
+        // --- 6. CONTADOR FLOTANTE (MEMORIA DE VALOR Y POSICIÓN) ---
         const elContador = document.querySelector('.floating-counter');
         const valor = document.getElementById('valor-contador');
 
-        // 1. CARGAR MEMORIA AL INICIAR
-        let cuenta = localStorage.getItem('contador-valor') || 0;
-        valor.innerText = cuenta;
-
-        const pos = JSON.parse(localStorage.getItem('contador-posicion'));
-        if (pos) {
-            elContador.style.bottom = 'auto';
-            elContador.style.right = 'auto';
-            elContador.style.left = pos.x;
-            elContador.style.top = pos.y;
-        }
-
-        // 2. LÓGICA DEL CONTADOR (CON GUARDADO)
-        const guardarCuenta = () => {
+        if(elContador && valor) {
+            let cuenta = parseInt(localStorage.getItem('contador-valor'), 10) || 0;
             valor.innerText = cuenta;
-            localStorage.setItem('contador-valor', cuenta);
-        };
 
-        document.getElementById('btn-sumar').onclick = () => { cuenta++; guardarCuenta(); };
-        document.getElementById('btn-restar').onclick = () => { cuenta--; guardarCuenta(); };
-        document.getElementById('btn-reset').onclick = () => { cuenta = 0; guardarCuenta(); };
+            const guardarCuenta = () => {
+                valor.innerText = cuenta;
+                try { localStorage.setItem('contador-valor', cuenta); } catch(e) {}
+            };
 
-        // 3. LÓGICA DE ARRASTRE
-        let isDragging = false;
-        let offsetX, offsetY;
+            const btnSumar = document.getElementById('btn-sumar');
+            const btnRestar = document.getElementById('btn-restar');
+            const btnReset = document.getElementById('btn-reset');
+            if(btnSumar) btnSumar.onclick = () => { cuenta++; guardarCuenta(); };
+            if(btnRestar) btnRestar.onclick = () => { cuenta--; guardarCuenta(); };
+            if(btnReset) btnReset.onclick = () => { cuenta = 0; guardarCuenta(); };
 
-        elContador.addEventListener('mousedown', (e) => {
-            if (e.target.tagName === 'BUTTON') return;
-            isDragging = true;
-            
-            const rect = elContador.getBoundingClientRect();
-            offsetX = e.clientX - rect.left;
-            offsetY = e.clientY - rect.top;
-
-            elContador.style.bottom = 'auto';
-            elContador.style.right = 'auto';
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            let x = e.clientX - offsetX;
-            let y = e.clientY - offsetY;
-
-            elContador.style.left = `${x}px`;
-            elContador.style.top = `${y}px`;
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (isDragging) {
-                // 4. GUARDAR POSICIÓN AL SOLTAR
-                const posicion = {
-                    x: elContador.style.left,
-                    y: elContador.style.top
+            // Posición guardada, siempre dentro de la pantalla.
+            const limitar = (x, y) => {
+                const ancho = elContador.offsetWidth;
+                const alto = elContador.offsetHeight;
+                return {
+                    x: Math.min(Math.max(8, x), Math.max(8, window.innerWidth - ancho - 8)),
+                    y: Math.min(Math.max(8, y), Math.max(8, window.innerHeight - alto - 8))
                 };
-                localStorage.setItem('contador-posicion', JSON.stringify(posicion));
-            }
-            isDragging = false;
-        });
-        
-        
-        // --- 📱 INSTALACIÓN DE APP (PWA) ---
-let deferredPrompt;
+            };
+            const aplicarPosicion = (x, y) => {
+                const p = limitar(x, y);
+                elContador.style.bottom = 'auto';
+                elContador.style.right = 'auto';
+                elContador.style.left = `${p.x}px`;
+                elContador.style.top = `${p.y}px`;
+                return p;
+            };
 
-// 1. Registrar el Service Worker
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Error:', err));
-    });
-}
+            try {
+                const guardada = JSON.parse(localStorage.getItem('contador-posicion'));
+                if(guardada) {
+                    const x = parseFloat(guardada.x);
+                    const y = parseFloat(guardada.y);
+                    if(!isNaN(x) && !isNaN(y)) aplicarPosicion(x, y);
+                }
+            } catch(e) {}
 
-// 2. Escuchar cuando Android nos da permiso de instalar
-window.addEventListener('beforeinstallprompt', (e) => {
-    // Evitar que Chrome muestre su propio mini-aviso automáticamente
-    e.preventDefault();
-    // Guardar el evento para usarlo luego
-    deferredPrompt = e;
-    
-    // Mostrar nuestro botón mágico "📲"
-    const installBtn = document.getElementById('btn-install-app');
-    installBtn.classList.remove('hidden');
+            let arrastre = null;
+            let rafPendiente = false;
 
-    // Darle la acción al botón
-    installBtn.addEventListener('click', async () => {
-        // Ocultar el botón
-        installBtn.classList.add('hidden');
-        // Mostrar la ventana emergente nativa de Android
-        deferredPrompt.prompt();
-        // Esperar a ver qué responde el usuario
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-            console.log('El técnico instaló la App');
+            elContador.addEventListener('pointerdown', (e) => {
+                if(e.target.closest('button')) return;
+                const rect = elContador.getBoundingClientRect();
+                arrastre = { id: e.pointerId, dx: e.clientX - rect.left, dy: e.clientY - rect.top };
+                elContador.classList.add('arrastrando');
+                try { elContador.setPointerCapture(e.pointerId); } catch (err) {}
+            });
+
+            elContador.addEventListener('pointermove', (e) => {
+                if(!arrastre || e.pointerId !== arrastre.id) return;
+                const x = e.clientX - arrastre.dx;
+                const y = e.clientY - arrastre.dy;
+                if(rafPendiente) return;
+                rafPendiente = true;
+                requestAnimationFrame(() => {
+                    rafPendiente = false;
+                    if(arrastre) aplicarPosicion(x, y);
+                });
+            });
+
+            const terminarArrastre = () => {
+                if(!arrastre) return;
+                arrastre = null;
+                elContador.classList.remove('arrastrando');
+                try {
+                    localStorage.setItem('contador-posicion', JSON.stringify({ x: elContador.style.left, y: elContador.style.top }));
+                } catch(e) {}
+            };
+            elContador.addEventListener('pointerup', terminarArrastre);
+            elContador.addEventListener('pointercancel', terminarArrastre);
+
+            window.addEventListener('resize', () => {
+                if(!elContador.style.left) return;
+                aplicarPosicion(parseFloat(elContador.style.left), parseFloat(elContador.style.top));
+            });
         }
-        // Limpiar la variable
-        deferredPrompt = null;
-    });
-});
 
+        // --- ATAJOS DE TECLADO ---
+        function cerrarModalSuperior() {
+            const abiertos = Array.from(document.querySelectorAll('.modal-overlay.show'));
+            if(abiertos.length) { closeModal(abiertos[abiertos.length - 1].id); return true; }
+            const dialogo = document.querySelector('dialog[open]');
+            if(dialogo) { dialogo.close(); return true; }
+            return false;
+        }
 
-// Detector de iOS
-const isIos = () => {
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    return /iphone|ipad|ipod/.test(userAgent);
-};
+        function copiarPrimerResultado() {
+            const vista = $id(`view-${currentTab}`);
+            if(!vista) return false;
+            const tarjeta = vista.querySelector('.card[data-action="copy"]:not(.oculto)');
+            if(!tarjeta) return false;
+            tarjeta.click();
+            return true;
+        }
 
-// Saber si ya está instalada o está en el navegador normal
-const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        document.addEventListener('keydown', (e) => {
+            if(e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+            const tag = (e.target.tagName || '').toLowerCase();
+            const escribiendo = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
 
-if (isIos() && !isStandalone) {
-    // Aquí puedes lanzar un mensaje Toast que diga: 
-    // "Para instalar en iPhone: Toca 'Compartir' y luego 'Agregar a Inicio'"
-    console.log("Usuario en iOS desde Safari");
-}
+            if(e.key === 'Escape') {
+                if(!cerrarModalSuperior() && escribiendo) e.target.blur();
+                return;
+            }
+            if(escribiendo) {
+                if(e.key === 'Enter' && e.target.id === 'search-bar') copiarPrimerResultado();
+                return;
+            }
+            if(e.key === '/') {
+                e.preventDefault();
+                const barra = $id('search-bar');
+                if(barra) barra.focus();
+                return;
+            }
+            if(/^[1-5]$/.test(e.key)) {
+                const destino = VISTAS[parseInt(e.key, 10) - 1];
+                if(destino) switchTab(destino);
+            }
+        });
+
+        // Un único listener para todas las tarjetas generadas (delegación).
+        document.addEventListener('click', alHacerClic);
+
+        
+        
+        // La instalación PWA ya se maneja en el bloque "INSTALACIÓN DE APP A PRUEBA DE FALLOS"
+        // del inicio del archivo (register + beforeinstallprompt + detector iOS).
+
 

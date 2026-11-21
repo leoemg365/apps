@@ -1,4 +1,4 @@
-const versionActual = "1.4"; // Cambia esto cada vez que actualices tu web
+const versionActual = "1.5"; // Cambia esto cada vez que actualices tu web
 const modal = document.getElementById("modalActualizaciones");
 const btnCerrar = document.getElementById("cerrarActualizacion");
 
